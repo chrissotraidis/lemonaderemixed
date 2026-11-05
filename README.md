@@ -1,6 +1,6 @@
 # Lemonade Remixed
 
-A modern, full-resolution remake of the 2002 lemonade stand game *Lemonade Tycoon Deluxe* (Hexacto): the same rules and the same daily loop, rebuilt to run sharp and fullscreen on a Mac, with quality-of-life improvements, in-game tips, and two small extras: a lemonade stand that lives in the MacBook notch and a desktop widget for managing it at a glance.
+The original 2002 lemonade stand game *Lemonade Tycoon Deluxe* (Hexacto), running unchanged under Wine inside a native Mac app that makes it better: sharp and fullscreen at any size, upscaled art, sound controls and tips, playable from the MacBook notch, and a desktop widget for managing the stand.
 
 ## How the original content is handled
 
@@ -12,8 +12,9 @@ This repository holds only our own code and documentation. Players bring their o
 ## Documents
 
 - [docs/MECHANICS.md](docs/MECHANICS.md): how the original game works, with the numbers measured so far.
-- [docs/PLAN.md](docs/PLAN.md): what the remix adds and how it is built.
+- [docs/PLAN.md](docs/PLAN.md): what the remix adds and how it works.
+- [docs/GOALS.md](docs/GOALS.md): the build plan as goals, each with its test.
 
 ## Status
 
-Research. The original runs under Wine on macOS, its catalogue and economy are documented, and the rebuild has not started yet.
+Early prototype. The original runs under Wine and its economy is documented. [mac/](mac) holds a first shell that mirrors the live game into a resizable window and beside the notch and sends input back through the helper in [runtime/helper](runtime/helper); it proves the plumbing, not the design. Next is G2: one app that installs and runs everything with no Wine visible.
