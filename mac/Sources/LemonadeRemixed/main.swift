@@ -7,7 +7,7 @@ import SwiftUI
 ///   LEMONADE_SUPPORT   use this folder instead of Application Support
 ///   LEMONADE_SETUP     install from this Setup.exe without asking
 ///   LEMONADE_REG_NAME, LEMONADE_REG_KEY   register without asking
-///   LEMONADE_MUTED=1   start muted
+///   LEMONADE_MUTED=1   mute this session (the saved setting is unchanged)
 ///   LEMONADE_PICTURE=sharp|pixel    picture mode
 ///   LEMONADE_WINDOW=WIDTHxHEIGHT    initial window content size in points
 ///   LEMONADE_SELFTEST="tap X Y"     send this through the app's input link
@@ -31,10 +31,7 @@ final class AppController: NSObject, NSApplicationDelegate {
     let work = DispatchQueue(label: "runtime")
     var termSource: DispatchSourceSignal?
 
-    var muted: Bool {
-        get { UserDefaults.standard.bool(forKey: "muted") }
-        set { UserDefaults.standard.set(newValue, forKey: "muted"); applyVolume() }
-    }
+    let sound = Sound()
 
     func applicationDidFinishLaunching(_ note: Notification) {
         // A plain kill (logout, Activity Monitor) still closes the game and Wine.
@@ -43,13 +40,12 @@ final class AppController: NSObject, NSApplicationDelegate {
         term.setEventHandler { quitSoon() }
         term.resume()
         termSource = term
-        if env["LEMONADE_MUTED"] == "1" { UserDefaults.standard.set(true, forKey: "muted") }
+        sound.output = { [weak self] v in self?.runtime.setVolume(v) }
         if let p = env["LEMONADE_PICTURE"] { UserDefaults.standard.set(p, forKey: "picture") }
         gameView = GameView(link: link)
         gameView.mode = picture
-        container = GameContainer(game: gameView, model: assistant)
-        container.assistant.open = !UserDefaults.standard.bool(forKey: "hideAssistant")
-        container.onToggle = { [weak self] in self?.toggleAssistant() }
+        container = GameContainer(game: gameView, model: assistant, sound: sound)
+        container.advisor.open = env["LEMONADE_ADVISOR_OPEN"] == "1"   // testing
         LT.registerFont()
         window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 960, height: 720),
                           styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
@@ -162,7 +158,7 @@ final class AppController: NSObject, NSApplicationDelegate {
         guard !showingGame else { return }
         showingGame = true
         window.contentView = container
-        fitWindowToGame()
+        window.contentAspectRatio = GameView.gameSize
         gameView.show(frames: runtime.framesFile)
         assistant.start()
         if let test = env["LEMONADE_SELFTEST"] {
@@ -170,9 +166,11 @@ final class AppController: NSObject, NSApplicationDelegate {
         }
     }
 
-    func applyVolume() { runtime.setVolume(muted ? 0 : 100) }
+    func applyVolume() { sound.apply() }
 
-    @objc func toggleMute() { muted.toggle() }
+    @objc func toggleMute() { sound.muted.toggle() }
+    @objc func setVolumeLevel(_ item: NSMenuItem) { sound.muted = false; sound.volume = item.tag }
+    @objc func toggleAdvisor() { container.advisor.open.toggle() }
     @objc func showWhereToGet() { InfoWindows.showWhereToGet() }
     @objc func showAbout() { InfoWindows.showAbout() }
 
@@ -208,6 +206,13 @@ final class AppController: NSObject, NSApplicationDelegate {
         let gameItem = NSMenuItem()
         let gameMenu = NSMenu(title: "Game")
         gameMenu.addItem(withTitle: "Mute", action: #selector(toggleMute), keyEquivalent: "m")
+        let volumeItem = gameMenu.addItem(withTitle: "Volume", action: nil, keyEquivalent: "")
+        let volumeMenu = NSMenu(title: "Volume")
+        for level in Sound.levels {
+            let item = volumeMenu.addItem(withTitle: "\(level)%", action: #selector(setVolumeLevel(_:)), keyEquivalent: "")
+            item.tag = level
+        }
+        volumeItem.submenu = volumeMenu
         gameMenu.addItem(.separator())
         for (i, mode) in PictureMode.allCases.enumerated() {
             let item = gameMenu.addItem(withTitle: mode.title, action: #selector(choosePicture(_:)), keyEquivalent: "\(i + 1)")
@@ -215,7 +220,7 @@ final class AppController: NSObject, NSApplicationDelegate {
         }
         gameMenu.addItem(.separator())
         gameMenu.addItem(withTitle: "Toggle Full Screen", action: #selector(NSWindow.toggleFullScreen(_:)), keyEquivalent: "f")
-        gameMenu.addItem(withTitle: "Show Assistant", action: #selector(toggleAssistant), keyEquivalent: "\\")
+        gameMenu.addItem(withTitle: "Advisor", action: #selector(toggleAdvisor), keyEquivalent: "\\")
         gameItem.submenu = gameMenu
         menu.addItem(gameItem)
         let helpItem = NSMenuItem()
@@ -230,33 +235,11 @@ final class AppController: NSObject, NSApplicationDelegate {
 
 extension AppController: NSMenuItemValidation {
     func validateMenuItem(_ item: NSMenuItem) -> Bool {
-        if item.action == #selector(toggleMute) { item.state = muted ? .on : .off }
+        if item.action == #selector(toggleMute) { item.state = sound.muted ? .on : .off }
+        if item.action == #selector(setVolumeLevel(_:)) { item.state = !sound.muted && sound.volume == item.tag ? .on : .off }
+        if item.action == #selector(toggleAdvisor) { item.state = container?.advisor.open == true ? .on : .off }
         if item.action == #selector(choosePicture(_:)) { item.state = (item.representedObject as? String) == picture.rawValue ? .on : .off }
-        if item.action == #selector(toggleAssistant) { item.state = container?.assistant.open == true ? .on : .off }
         return true
-    }
-}
-
-extension AppController {
-    @objc func toggleAssistant() {
-        container.assistant.open.toggle()
-        UserDefaults.standard.set(!container.assistant.open, forKey: "hideAssistant")
-        fitWindowToGame(animate: true)
-    }
-
-    /// Sizes the window so the game stays 4:3 beside the assistant.
-    func fitWindowToGame(animate: Bool = false) {
-        window.contentAspectRatio = container.aspect
-        guard !window.styleMask.contains(.fullScreen) else { container.needsLayout = true; return }
-        var h = window.contentLayoutRect.height
-        let a = container.aspect
-        if let screen = window.screen?.visibleFrame, h * a.width / a.height > screen.width {
-            h = screen.width * a.height / a.width
-        }
-        let chrome = window.frame.height - window.contentLayoutRect.height
-        var frame = window.frame
-        frame.size = NSSize(width: (h * a.width / a.height).rounded(), height: h + chrome)
-        window.setFrame(frame, display: true, animate: animate)
     }
 }
 

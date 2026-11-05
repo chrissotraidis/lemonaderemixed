@@ -11,7 +11,6 @@ struct SavedRecipe: Codable, Identifiable, Equatable {
 /// Live game state for the assistant, plus the actions it offers.
 final class AssistantModel: ObservableObject {
     @Published private(set) var state = GameState()
-    @Published var dismissedReportDay = -1
     @Published private(set) var busy: String?
     @Published private(set) var lastResult: String?
     @Published var recipes: [SavedRecipe] = [] { didSet { saveRecipes() } }
@@ -60,8 +59,18 @@ final class AssistantModel: ObservableObject {
     /// The last finished day's report, while planning the next one.
     var report: GameState.Report? {
         let s = state
-        guard s.isPlanning, s.day > 0, !s.report.isEmpty, dismissedReportDay != s.day else { return nil }
+        guard s.isPlanning, s.day > 0, !s.report.isEmpty else { return nil }
         return s.report
+    }
+
+    /// The Advisor is offered on the planning and day screens.
+    var showsAdvisor: Bool { state.screen == "plan" || state.screen == "day" }
+
+    /// Something worth a nudge: not enough stock for the day, or rent pressure.
+    var urgent: Bool {
+        let s = state
+        guard s.isPlanning else { return false }
+        return s.cupsServable < 10 || (s.rent > 0 && s.cash < s.rent * 2)
     }
 
     var tips: [String] { Advisor.tips(state) }
