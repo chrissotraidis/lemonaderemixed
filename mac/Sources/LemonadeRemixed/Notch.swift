@@ -12,7 +12,7 @@ enum NotchMode { case collapsed, mini, full }
 struct NotchLayout {
     let screen: NSScreen
     static let leftWing: CGFloat = 200
-    static let maxRight: CGFloat = 64
+    static let maxRight: CGFloat = 220
     static let fastGlyph = CGRect(x: 6, y: 5, width: 26, height: 22)    // in the right wing, top-left origin
 
     var frame: CGRect { screen.frame }
@@ -290,8 +290,10 @@ struct IslandView: View {
     @ObservedObject var model: NotchModel
     let layout: NotchLayout
     private var s: GameState { model.state }
-    /// The street view or the full game is open below the notch.
+    /// The small view or the full game is open below the notch.
     private var open: Bool { model.mode != .collapsed }
+    /// Room right of the notch for the cash and the ticker (any free space counts; it scrolls).
+    private var roomy: Bool { model.right > 0 }
 
     var body: some View {
         let h = layout.stripHeight
@@ -310,100 +312,153 @@ struct IslandView: View {
         .animation(.easeInOut(duration: 0.3), value: model.pulse)
     }
 
-    /// Left of the notch, hugging it. Closed: cash, a status line and your stand.
-    /// Open: the stand is on screen below, so the wing carries more numbers instead.
+    /// Left of the notch: your stand, live and wide. While the small view is open
+    /// (the stand is on screen below), today's numbers instead.
     private var left: some View {
         let h = layout.stripHeight
-        return HStack(spacing: 10) {
-            if !open, model.running {
-                // Fast-forward while selling, on this side: the right of the notch is often full of other apps' icons.
-                Image(systemName: "forward.fill")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(s.fast == 1 ? LT.buttonShadow : LT.dim)
-                    .frame(width: NotchLayout.fastGlyph.width, height: NotchLayout.fastGlyph.height)
-                    .background(RoundedRectangle(cornerRadius: 5).fill(s.fast == 1 ? LT.yellow : Color.white.opacity(0.12)))
-                    .padding(.leading, NotchLayout.fastGlyph.minX)
-                    .help(s.fast == 1 ? "Normal speed" : "Fast forward")
-            }
-            Spacer(minLength: 0)
-            if open, model.hasGame, let extra {
-                VStack(alignment: .trailing, spacing: -4) {
-                    Text(extra.0).font(LT.font(h * 0.5)).foregroundStyle(.white)
-                    Text(extra.1).font(LT.font(h * 0.38)).foregroundStyle(LT.dim)
-                }
-            }
-            VStack(alignment: .trailing, spacing: -4) {
-                Text(model.hasGame ? money(s.cash) : "Lemonade").font(LT.font(h * 0.56)).foregroundStyle(LT.yellow)
-                    .padding(.horizontal, 3)
-                    .background(RoundedRectangle(cornerRadius: 4).fill(LT.yellow.opacity(model.pulse ? 0.3 : 0)))
-                TimelineView(.periodic(from: .now, by: 2.5)) { ctx in
-                    // While nothing is selling, the status line takes turns with a few useful lines.
-                    let lines = sublines
-                    let i = Int(ctx.date.timeIntervalSinceReferenceDate / 2.5) % max(1, lines.count)
-                    Text(lines[min(i, lines.count - 1)].0).font(LT.font(h * 0.38))
-                        .foregroundStyle(model.pulse ? LT.yellow : lines[min(i, lines.count - 1)].1)
-                        .id(i)
-                        .transition(.push(from: .bottom))
-                        .animation(.easeOut(duration: 0.35), value: i)
-                }
-                .frame(height: h * 0.4, alignment: .trailing)
-                .clipped()
-            }
-            if !open {
-                Group {
-                    if model.hasGame {
-                        GameCrop(model: model, rect: model.around(width: 60, height: 40))
-                    } else {
-                        Image(nsImage: NSApp.applicationIconImage).resizable().interpolation(.high).aspectRatio(contentMode: .fit)
-                            .rotationEffect(.degrees(bob ? 6 : -6))
-                            .offset(y: bob ? -1 : 1)
-                            .animation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true), value: bob)
-                            .onAppear { bob = true }
+        return ZStack(alignment: .leading) {
+            if open {
+                HStack(spacing: 10) {
+                    Spacer(minLength: 0)
+                    if model.hasGame, let extra {
+                        VStack(alignment: .trailing, spacing: -4) {
+                            Text(extra.0).font(LT.font(h * 0.5)).foregroundStyle(.white)
+                            Text(extra.1).font(LT.font(h * 0.38)).foregroundStyle(LT.dim)
+                        }
                     }
+                    if !roomy { cash(h) }
                 }
-                .frame(width: (h - 4) * 1.5, height: h - 4)
-                .clipShape(RoundedRectangle(cornerRadius: 4))
+                .padding(.trailing, 8)
+            } else {
+                stand(h)
+                    .overlay(alignment: .bottomTrailing) {
+                        if !roomy { cash(h * 0.85).padding(.horizontal, 3).background(.black.opacity(0.6)).padding(2) }
+                    }
+                    .padding(.leading, 4).padding(.trailing, 8)
+                if model.running {
+                    // Fast-forward while selling, over the left edge of the stand.
+                    Image(systemName: "forward.fill")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(s.fast == 1 ? LT.buttonShadow : .white)
+                        .frame(width: NotchLayout.fastGlyph.width, height: NotchLayout.fastGlyph.height)
+                        .background(RoundedRectangle(cornerRadius: 5).fill(s.fast == 1 ? LT.yellow : Color.black.opacity(0.65)))
+                        .padding(.leading, NotchLayout.fastGlyph.minX)
+                        .help(s.fast == 1 ? "Normal speed" : "Fast forward")
+                }
             }
         }
-        .padding(.trailing, 8)
+    }
+
+    /// The street around your cart, as wide as the wing, tall enough for the whole cart.
+    @ViewBuilder private func stand(_ h: CGFloat) -> some View {
+        let w = NotchLayout.leftWing - 12, ht = h - 4
+        let gameHeight: CGFloat = 40
+        Group {
+            if model.hasGame {
+                GameCrop(model: model, rect: model.around(width: (w * gameHeight / ht).rounded(), height: gameHeight))
+            } else {
+                Image(nsImage: NSApp.applicationIconImage).resizable().interpolation(.high).aspectRatio(contentMode: .fit)
+                    .rotationEffect(.degrees(bob ? 6 : -6))
+                    .offset(y: bob ? -1 : 1)
+                    .animation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true), value: bob)
+                    .onAppear { bob = true }
+                    .frame(maxWidth: .infinity)
+            }
+        }
+        .frame(width: w, height: ht)
+        .clipShape(RoundedRectangle(cornerRadius: 5))
+    }
+
+    private func cash(_ h: CGFloat) -> some View {
+        Text(model.hasGame ? money(s.cash) : "Lemonade").font(LT.font(h * 0.56)).foregroundStyle(LT.yellow)
+            .lineLimit(1).minimumScaleFactor(0.6)
+            .padding(.horizontal, 3)
+            .background(RoundedRectangle(cornerRadius: 4).fill(LT.yellow.opacity(model.pulse ? 0.3 : 0)))
     }
 
     @State private var bob = false
 
-    /// The status line under the cash. One line while selling; while idle, a few that take turns.
-    private var sublines: [(String, Color)] {
-        guard model.hasGame else { return [("Remixed", LT.dim), ("click to play", LT.yellow)] }
-        if model.pulse, !s.report.isEmpty { return [(signedMoney(s.report.earnings) + " yesterday", LT.yellow)] }
-        if s.running == 1 { return [(open ? signedMoney(s.today.profit) + " today" : "\(s.today.sold) sold today", LT.dim)] }
-        guard s.screen == "plan", !open else { return [("day \(s.dayNumber)", LT.dim)] }
-        let short = s.cupsServable < Advisor.expectedCups(s)
-        return [("day \(s.dayNumber)", LT.dim),
-                ("\(s.highF)F " + GameState.weatherWord(s.weather[0]), LT.dim),
-                (short ? "restock needed" : "\(s.cupsServable) cups ready", short ? warnColor : LT.dim),
-                ("click to plan", LT.yellow)]
-    }
-
-    /// The second column while open: sales during the day, the forecast while planning.
+    /// The second column while open: sales during the day, yesterday while planning.
     private var extra: (String, String)? {
         if model.running { return ("\(s.today.sold) sold", "\(s.today.missed) walked away") }
         if s.screen == "plan", s.day > 0, !s.report.isEmpty { return (signedMoney(s.report.earnings), "yesterday, \(s.report.sold) sold") }
         return nil
     }
 
-    /// Right of the notch: the temperature now while selling, else the day's high.
+    /// Right of the notch: cash, and under it a line that scrolls by like a ticker.
     private var right: some View {
         let h = layout.stripHeight
-        return HStack(spacing: 4) {
-            if model.running {
-                Text("\(s.tempsF[1])F").font(LT.font(h * 0.5)).foregroundStyle(.white).fixedSize()
+        return Group {
+            if roomy {
+                VStack(alignment: .leading, spacing: -4) {
+                    cash(h)
+                    Ticker(text: ticker, font: LT.font(h * 0.38), color: model.pulse ? LT.yellow : LT.dim)
+                        .frame(height: h * 0.42)
+                }
+                .padding(.leading, 4).padding(.trailing, 2)
             } else if model.hasGame {
-                Text("\(s.highF)F").font(LT.font(h * 0.5)).foregroundStyle(.white).fixedSize()
+                Text("\(model.running ? s.tempsF[1] : s.highF)F").font(LT.font(h * 0.5)).foregroundStyle(.white).fixedSize()
+                    .padding(.leading, 8)
             }
-            Spacer(minLength: 0)
         }
-        .padding(.leading, NotchLayout.fastGlyph.minX)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// What the ticker says, by situation.
+    private var ticker: String {
+        guard model.hasGame else { return "Remixed  -  click to play" }
+        var parts: [String] = []
+        if model.pulse, !s.report.isEmpty { parts.append("day over: " + signedMoney(s.report.earnings)) }
+        if model.running {
+            parts += ["\(s.today.sold) sold", signedMoney(s.today.profit) + " today", "\(s.today.missed) walked away", "\(s.tempsF[1])F now"]
+        } else if s.screen == "plan" {
+            let short = s.cupsServable < Advisor.expectedCups(s)
+            parts += ["day \(s.dayNumber)", "\(s.lowF)-\(s.highF)F " + s.forecastWords,
+                      short ? "restock needed" : "\(s.cupsServable) cups ready"]
+            if s.day > 0, !s.report.isEmpty { parts.append("yesterday " + signedMoney(s.report.earnings)) }
+            parts.append("click to plan")
+        } else {
+            parts.append("day \(s.dayNumber)")
+        }
+        return parts.joined(separator: "  -  ")
     }
 }
+
+/// One line of text that scrolls right to left in a loop, like a stock ticker.
+/// Short text that fits just sits still.
+struct Ticker: View {
+    let text: String
+    let font: Font
+    let color: Color
+    var speed: CGFloat = 22          // points a second
+    @State private var textWidth: CGFloat = 0
+
+    var body: some View {
+        GeometryReader { geo in
+            let gap: CGFloat = 28
+            let label = Text(text).font(font).foregroundStyle(color).lineLimit(1).fixedSize()
+            if textWidth > 0, textWidth <= geo.size.width {
+                label
+            } else {
+                TimelineView(.periodic(from: .now, by: 1.0 / 30)) { ctx in
+                    let cycle = max(1, textWidth + gap)
+                    let x = -CGFloat((ctx.date.timeIntervalSinceReferenceDate * Double(speed)).truncatingRemainder(dividingBy: Double(cycle)))
+                    HStack(spacing: gap) { label; label }
+                        .offset(x: x.rounded())
+                }
+            }
+        }
+        .clipped()
+        .background(alignment: .leading) {
+            Text(text).font(font).lineLimit(1).fixedSize().hidden()
+                .background(GeometryReader { g in Color.clear.onAppear { textWidth = g.size.width }.onChange(of: g.size.width) { _, w in textWidth = w } })
+        }
+        .mask(LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.06),
+                                     .init(color: .black, location: 0.94), .init(color: .clear, location: 1)],
+                             startPoint: .leading, endPoint: .trailing))
+    }
+}
+
 
 // MARK: - Mini and full
 
