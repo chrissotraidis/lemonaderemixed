@@ -3,6 +3,10 @@ the original game. One command per line, one reply line each:
 
   ping                          pong
   state                         stopped | starting | needs-key | game
+  info                          game state as one line of JSON (gamestate.py)
+  buy N*12                      buy packs: lemons S M L, sugar S M L, ice S M L,
+                                cups S M L (actions.py)
+  recipe L S I | price CENTS | startday
   move X Y | down X Y | up X Y | tap X Y
                                 mouse input at game coordinates (640x480)
   char TEXT                     type characters
@@ -93,6 +97,16 @@ def handle(line):
         return "pong"
     if cmd == "state":
         return state()
+    if cmd == "info":
+        return game_state_json()
+    if cmd == "buy":
+        return buy([int(v) for v in arg.split()])
+    if cmd == "recipe":
+        return set_recipe(*[int(v) for v in arg.split()])
+    if cmd == "price":
+        return set_price(int(arg))
+    if cmd == "startday":
+        return start_day()
     if cmd == "register":
         name, _, key = arg.partition("\t")
         return register(name, key)

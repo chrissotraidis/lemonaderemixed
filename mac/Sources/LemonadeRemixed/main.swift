@@ -23,6 +23,8 @@ final class AppController: NSObject, NSApplicationDelegate {
     let setup = SetupModel()
     var window: NSWindow!
     var gameView: GameView!
+    var container: GameContainer!
+    let assistant = AssistantModel()
     var showingGame = false
     var triedAutoKey = false
     var sawGame = false
@@ -45,10 +47,13 @@ final class AppController: NSObject, NSApplicationDelegate {
         if let p = env["LEMONADE_PICTURE"] { UserDefaults.standard.set(p, forKey: "picture") }
         gameView = GameView(link: link)
         gameView.mode = picture
+        container = GameContainer(game: gameView, model: assistant)
+        container.assistant.open = !UserDefaults.standard.bool(forKey: "hideAssistant")
+        container.onToggle = { [weak self] in self?.toggleAssistant() }
+        LT.registerFont()
         window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 960, height: 720),
                           styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
         window.title = "Lemonade Remixed"
-        window.contentAspectRatio = GameView.gameSize
         window.collectionBehavior = [.fullScreenPrimary]
         window.contentView = NSHostingView(rootView: SetupView(model: setup))
         window.center()
@@ -154,8 +159,10 @@ final class AppController: NSObject, NSApplicationDelegate {
     func showGame() {
         guard !showingGame else { return }
         showingGame = true
-        window.contentView = gameView
+        window.contentView = container
+        fitWindowToGame()
         gameView.show(frames: runtime.framesFile)
+        assistant.start()
         if let test = env["LEMONADE_SELFTEST"] {
             DispatchQueue.main.asyncAfter(deadline: .now() + 12) { self.link.send(test) }
         }
@@ -202,6 +209,7 @@ final class AppController: NSObject, NSApplicationDelegate {
         }
         gameMenu.addItem(.separator())
         gameMenu.addItem(withTitle: "Toggle Full Screen", action: #selector(NSWindow.toggleFullScreen(_:)), keyEquivalent: "f")
+        gameMenu.addItem(withTitle: "Show Assistant", action: #selector(toggleAssistant), keyEquivalent: "\\")
         gameItem.submenu = gameMenu
         menu.addItem(gameItem)
         NSApp.mainMenu = menu
@@ -212,7 +220,31 @@ extension AppController: NSMenuItemValidation {
     func validateMenuItem(_ item: NSMenuItem) -> Bool {
         if item.action == #selector(toggleMute) { item.state = muted ? .on : .off }
         if item.action == #selector(choosePicture(_:)) { item.state = (item.representedObject as? String) == picture.rawValue ? .on : .off }
+        if item.action == #selector(toggleAssistant) { item.state = container?.assistant.open == true ? .on : .off }
         return true
+    }
+}
+
+extension AppController {
+    @objc func toggleAssistant() {
+        container.assistant.open.toggle()
+        UserDefaults.standard.set(!container.assistant.open, forKey: "hideAssistant")
+        fitWindowToGame(animate: true)
+    }
+
+    /// Sizes the window so the game stays 4:3 beside the assistant.
+    func fitWindowToGame(animate: Bool = false) {
+        window.contentAspectRatio = container.aspect
+        guard !window.styleMask.contains(.fullScreen) else { container.needsLayout = true; return }
+        var h = window.contentLayoutRect.height
+        let a = container.aspect
+        if let screen = window.screen?.visibleFrame, h * a.width / a.height > screen.width {
+            h = screen.width * a.height / a.width
+        }
+        let chrome = window.frame.height - window.contentLayoutRect.height
+        var frame = window.frame
+        frame.size = NSSize(width: (h * a.width / a.height).rounded(), height: h + chrome)
+        window.setFrame(frame, display: true, animate: animate)
     }
 }
 

@@ -85,11 +85,14 @@ def main(a):
         # process must start the game and outlive it: Armadillo closes the
         # game when any other Windows process starts beside it.
         import contextlib, glob, io, os, subprocess
-        global GAME_PROC
+        global GAME_PROC, GAME_DIR
         game = a[1] if len(a) > 1 else r"C:\Program Files (x86)\Lemonade Tycoon Deluxe"
+        GAME_DIR = game
         here = os.path.dirname(os.path.abspath(__file__))
         GAME_PROC = subprocess.Popen([os.path.join(game, "Lemonade.exe")], cwd=game)
         exec(open(os.path.join(here, "bridge.py")).read(), globals())
+        exec(open(os.path.join(here, "gamestate.py")).read(), globals())
+        exec(open(os.path.join(here, "actions.py")).read(), globals())
         q = os.path.join(here, "q")
         os.makedirs(q, exist_ok=True)
         while True:

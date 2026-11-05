@@ -30,7 +30,7 @@ echo "$PY_SHA  build/cache/$PY_ZIP" | shasum -a 256 -c - >/dev/null
 rm -rf "$RES/helper"
 mkdir -p "$RES/helper/python"
 unzip -q build/cache/$PY_ZIP -d "$RES/helper/python"
-cp ../runtime/helper/winctl.py ../runtime/helper/bridge.py "$RES/helper/"
+cp ../runtime/helper/*.py "$RES/helper/"
 
 rm -rf "$RES/fmodproxy"
 mkdir -p "$RES/agent"
@@ -44,6 +44,9 @@ for s in 16 32 128 256 512; do
   sips -z $((s * 2)) $((s * 2)) Resources/icon/AppIcon-1024.png --out "$ICONSET/icon_${s}x${s}@2x.png" >/dev/null
 done
 iconutil -c icns "$ICONSET" -o "$RES/AppIcon.icns"
+
+mkdir -p "$RES/fonts"
+cp Resources/fonts/VT323-Regular.ttf Resources/fonts/VT323-OFL.txt "$RES/fonts/"
 
 cat > "$APP/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
