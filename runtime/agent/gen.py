@@ -5,7 +5,7 @@
 
 Every FMOD 3 export becomes a thunk that counts the call and jumps to the
 same function in the real library (fmodreal.dll). The functions in WRAPPED are
-written by hand in fmodproxy.c instead.
+written by hand in audio.c instead.
 """
 import os
 import sys

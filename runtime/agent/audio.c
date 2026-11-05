@@ -1,11 +1,12 @@
 /*
- * fmod.dll proxy for Lemonade Remixed.
+ * The in-game agent for Lemonade Remixed, loaded by the game as fmod.dll.
  *
  * The game's own fmod.dll is renamed fmodreal.dll; this library takes its
  * place, passes every call through, and applies the player's volume from
  * remix-volume.txt (0-100, next to the DLL) to sound effects and music.
  * If remix-fmod.log exists at start, it is filled with per-function call
- * counts, which shows which parts of FMOD the game uses.
+ * counts, which shows which parts of FMOD the game uses. It also starts the
+ * frame tap (frametap.c).
  */
 #include "proxy.h"
 
@@ -31,12 +32,14 @@ int same(const char *a, const char *b) {
     return *a == *b;
 }
 
-static void path(char *out, const char *file) {
+void agent_path(char *out, const char *file) {
     int n = 0;
     for (const char *s = g_dir; *s; s++) out[n++] = *s;
     for (const char *s = file; *s; s++) out[n++] = *s;
     out[n] = 0;
 }
+
+#define path agent_path
 
 static int scaled(int v, int max) {
     int s = v * g_user / 100;
@@ -153,6 +156,7 @@ BOOL __stdcall DllMain(HANDLE self, DWORD reason, void *reserved) {
         if (same(g_names[i], "_FMUSIC_GetMasterVolume@4")) i_musicGet = i;
         else if (same(g_names[i], "_FSOUND_GetSFXMasterVolume@0")) i_sfxGet = i;
     CreateThread(0, 0, watcher, 0, 0, 0);
+    start_frame_tap();
     (void)reserved;
     return 1;
 }

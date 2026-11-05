@@ -8,6 +8,8 @@ import SwiftUI
 ///   LEMONADE_SETUP     install from this Setup.exe without asking
 ///   LEMONADE_REG_NAME, LEMONADE_REG_KEY   register without asking
 ///   LEMONADE_MUTED=1   start muted
+///   LEMONADE_PICTURE=sharp|pixel    picture mode
+///   LEMONADE_WINDOW=WIDTHxHEIGHT    initial window content size in points
 final class AppController: NSObject, NSApplicationDelegate {
     let env = ProcessInfo.processInfo.environment
     lazy var runtime = GameRuntime(
@@ -16,7 +18,6 @@ final class AppController: NSObject, NSApplicationDelegate {
             ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
                 .appendingPathComponent("Lemonade Remixed"))
     let link = GameLink()
-    let mirror = GameMirror()
     let setup = SetupModel()
     var window: NSWindow!
     var gameView: GameView!
@@ -32,20 +33,24 @@ final class AppController: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ note: Notification) {
         if env["LEMONADE_MUTED"] == "1" { UserDefaults.standard.set(true, forKey: "muted") }
+        if let p = env["LEMONADE_PICTURE"] { UserDefaults.standard.set(p, forKey: "picture") }
         gameView = GameView(link: link)
-        mirror.attach(gameView.pixels)
+        gameView.mode = picture
         window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 960, height: 720),
                           styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
         window.title = "Lemonade Remixed"
-        window.contentAspectRatio = GameMirror.gameSize
+        window.contentAspectRatio = GameView.gameSize
         window.collectionBehavior = [.fullScreenPrimary]
         window.contentView = NSHostingView(rootView: SetupView(model: setup))
         window.center()
+        if let size = env["LEMONADE_WINDOW"]?.split(separator: "x").compactMap({ Double($0) }), size.count == 2 {
+            window.setContentSize(CGSize(width: size[0], height: size[1]))
+            window.center()
+        }
         window.makeKeyAndOrderFront(nil)
         setup.onChoose = { [weak self] in self?.chooseInstaller() }
         setup.onRegister = { [weak self] name, key in self?.register(name, key) }
         buildMenu()
-        NSApp.activate(ignoringOtherApps: true)
 
         if runtime.isInstalled {
             start()
@@ -140,12 +145,22 @@ final class AppController: NSObject, NSApplicationDelegate {
         guard !showingGame else { return }
         showingGame = true
         window.contentView = gameView
-        mirror.start()
+        gameView.show(frames: runtime.framesFile)
     }
 
     func applyVolume() { runtime.setVolume(muted ? 0 : 100) }
 
     @objc func toggleMute() { muted.toggle() }
+
+    var picture: PictureMode {
+        PictureMode(rawValue: UserDefaults.standard.string(forKey: "picture") ?? "") ?? .sharp
+    }
+
+    @objc func choosePicture(_ item: NSMenuItem) {
+        guard let mode = item.representedObject as? String else { return }
+        UserDefaults.standard.set(mode, forKey: "picture")
+        gameView.mode = picture
+    }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         work.async { [self] in
@@ -167,6 +182,12 @@ final class AppController: NSObject, NSApplicationDelegate {
         let gameItem = NSMenuItem()
         let gameMenu = NSMenu(title: "Game")
         gameMenu.addItem(withTitle: "Mute", action: #selector(toggleMute), keyEquivalent: "m")
+        gameMenu.addItem(.separator())
+        for (i, mode) in PictureMode.allCases.enumerated() {
+            let item = gameMenu.addItem(withTitle: mode.title, action: #selector(choosePicture(_:)), keyEquivalent: "\(i + 1)")
+            item.representedObject = mode.rawValue
+        }
+        gameMenu.addItem(.separator())
         gameMenu.addItem(withTitle: "Toggle Full Screen", action: #selector(NSWindow.toggleFullScreen(_:)), keyEquivalent: "f")
         gameItem.submenu = gameMenu
         menu.addItem(gameItem)
@@ -177,6 +198,7 @@ final class AppController: NSObject, NSApplicationDelegate {
 extension AppController: NSMenuItemValidation {
     func validateMenuItem(_ item: NSMenuItem) -> Bool {
         if item.action == #selector(toggleMute) { item.state = muted ? .on : .off }
+        if item.action == #selector(choosePicture(_:)) { item.state = (item.representedObject as? String) == picture.rawValue ? .on : .off }
         return true
     }
 }

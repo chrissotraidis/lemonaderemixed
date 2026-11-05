@@ -16,7 +16,7 @@ public final class GameRuntime {
         }
     }
 
-    /// Where the bundled pieces live: wine/, helper/ and fmodproxy/fmod.dll.
+    /// Where the bundled pieces live: wine/, helper/ and agent/fmod.dll.
     public let resources: URL
     /// ~/Library/Application Support/Lemonade Remixed (or an override).
     public let support: URL
@@ -25,6 +25,8 @@ public final class GameRuntime {
     public var gameDir: URL { prefix.appendingPathComponent("drive_c/Program Files (x86)/Lemonade Tycoon Deluxe") }
     var helperDir: URL { prefix.appendingPathComponent("drive_c/remix/helper") }
     var logFile: URL { support.appendingPathComponent("wine.log") }
+    /// Frames from the in-game agent's frame tap.
+    public var framesFile: URL { gameDir.appendingPathComponent("remix-frames.bin") }
     var wine: URL { resources.appendingPathComponent("wine/bin/wine") }
     var wineserver: URL { resources.appendingPathComponent("wine/bin/wineserver") }
 
@@ -64,21 +66,48 @@ public final class GameRuntime {
 
         progress("Installing the game…")
         try archive.extract(to: gameDir)
-        try installAudioProxy()
+        try installAgent()
         progress("Ready")
     }
 
-    /// The game's fmod.dll becomes fmodreal.dll; our proxy takes its place
-    /// and applies the volume from remix-volume.txt.
-    private func installAudioProxy() throws {
+    /// The game's fmod.dll becomes fmodreal.dll and our agent takes its
+    /// place: it applies the volume from remix-volume.txt and writes frames
+    /// to remix-frames.bin.
+    private func installAgent() throws {
         let fm = FileManager.default
         let original = gameDir.appendingPathComponent("fmod.dll")
         let real = gameDir.appendingPathComponent("fmodreal.dll")
-        let proxy = resources.appendingPathComponent("fmodproxy/fmod.dll")
-        guard fm.fileExists(atPath: proxy.path) else { throw Failure.missingResource("the audio proxy") }
+        let agent = resources.appendingPathComponent("agent/fmod.dll")
+        guard fm.fileExists(atPath: agent.path) else { throw Failure.missingResource("the in-game agent") }
         if !fm.fileExists(atPath: real.path) { try fm.moveItem(at: original, to: real) }
         try? fm.removeItem(at: original)
-        try fm.copyItem(at: proxy, to: original)
+        try fm.copyItem(at: agent, to: original)
+    }
+
+    /// Wine's headless display driver: the game's windows exist but are never
+    /// shown, and Wine never appears in the Dock. Frames come from the agent.
+    private func useHeadlessDisplay() {
+        let userReg = prefix.appendingPathComponent("user.reg")
+        if let text = try? String(contentsOf: userReg, encoding: .utf8), text.contains("\"Graphics\"=\"null\"") { return }
+        _ = run(wine, ["reg", "add", #"HKCU\Software\Wine\Drivers"#, "/v", "Graphics", "/d", "null", "/f"], display: false)
+        _ = run(wineserver, ["-w"])
+    }
+
+    /// Older setups linked Wine's Desktop, Documents and similar folders to
+    /// the player's own. Replace those links (only the links) with empty
+    /// folders so the game never reaches outside its own setup.
+    private func isolateUserFolders() {
+        let fm = FileManager.default
+        let users = prefix.appendingPathComponent("drive_c/users")
+        for user in (try? fm.contentsOfDirectory(atPath: users.path)) ?? [] {
+            let dir = users.appendingPathComponent(user)
+            for item in (try? fm.contentsOfDirectory(atPath: dir.path)) ?? [] {
+                let link = dir.appendingPathComponent(item)
+                guard let target = try? fm.destinationOfSymbolicLink(atPath: link.path),
+                      !target.hasPrefix(support.path) else { continue }
+                if unlink(link.path) == 0 { try? fm.createDirectory(at: link, withIntermediateDirectories: false) }
+            }
+        }
     }
 
     // MARK: - Run
@@ -86,8 +115,10 @@ public final class GameRuntime {
     /// Starts the helper, which starts the game and serves the bridge.
     public func launch() throws {
         guard helper?.isRunning != true else { return }
+        isolateUserFolders()   // before any Wine process can follow an old link
         try installHelper()
-        try? installAudioProxy()   // keep the proxy current with the app
+        try? installAgent()   // keep the agent current with the app
+        useHeadlessDisplay()
         let p = makeProcess(wine, [Self.helperWindows + #"\python\pythonw.exe"#,
                                    Self.helperWindows + #"\winctl.py"#, "serve", Self.gameDirWindows])
         try p.run()
@@ -126,6 +157,11 @@ public final class GameRuntime {
         p.arguments = args
         var env = ProcessInfo.processInfo.environment
         env["WINEPREFIX"] = prefix.path
+        // A private home folder: otherwise Wine links its Desktop, Documents
+        // and other folders to the player's own, and macOS asks for access.
+        let home = support.appendingPathComponent("home")
+        try? FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
+        env["HOME"] = home.path
         env["WINEDEBUG"] = "-all"
         env["WINEDLLOVERRIDES"] = "mscoree=;mshtml=;winemenubuilder.exe=d" + (display ? "" : ";winemac.drv=d")
         p.environment = env

@@ -17,4 +17,4 @@ This repository holds only our own code and documentation. Players bring their o
 
 ## Status
 
-G2 is built and waiting for a play check: [mac/](mac) builds Lemonade Remixed.app, which installs the original from your own `Setup.exe` into a private Wine setup, registers it, and plays it in a native window with mute, while Wine stays out of sight. The helper inside Wine lives in [runtime/helper](runtime/helper) and the audio proxy in [runtime/fmodproxy](runtime/fmodproxy). Build with `mac/bundle.sh` (needs Wine Stable from Homebrew and LLVM).
+G2 and G3 are built. [mac/](mac) builds Lemonade Remixed.app, which installs the original from your own `Setup.exe` into a private Wine setup, registers it, and plays it in a resizable native window with a sharp picture and mute, while Wine stays completely out of sight. The helper inside Wine lives in [runtime/helper](runtime/helper) and the in-game agent (audio volume and frame tap) in [runtime/agent](runtime/agent). Build with `mac/bundle.sh` (needs Wine Stable from Homebrew and LLVM).

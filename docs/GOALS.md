@@ -45,7 +45,7 @@ Chris's first look (5 November) found the notch and picture not good enough: the
 - [x] First launch asks for `Setup.exe`, checks its SHA-256 and unpacks it in Swift (`RemixCore.InstallerArchive`; byte-identical to the Python unpacker) into the prefix.
 - [x] The player enters their registration name and key in the app; the helper fills in Armadillo's dialog. A wrong key shows an error and can be retried.
 - [x] Launch starts the helper, which starts the game; the presenter connects on its own. The app quits when the game closes, and a relaunch reconnects.
-- [x] The Wine window is never visible: the helper moves every game window off-screen within 15 ms and the presenter captures it there. A 30 ms on-screen watcher saw no Wine window from install to play. (Wine's Dock icon remains; see G3.)
+- [x] The Wine window is never visible (G2 kept it off-screen; G3 replaced that with a headless display).
 - [x] Mute works on every screen: an FMOD proxy (`runtime/fmodproxy`) applies the app's volume to FMOD's effects master, which carries every sound the game plays (it never uses FMUSIC). Measured: master volume 0 while muted.
 - [x] Quitting the app closes the game and every Wine process; saves survive (supplies and day progress checked across two relaunches).
 
@@ -53,16 +53,19 @@ Chris's first look (5 November) found the notch and picture not good enough: the
 
 - [ ] **Chris**: build with `mac/bundle.sh`, open `mac/build/Lemonade Remixed.app`, choose `Setup.exe`, register, play a day, try ⌘M, quit and reopen.
 
-## G3. A sharp picture
+## G3. A sharp picture ✅ (waiting for Chris's look)
 
-*Objective:* the original art looks crisp at every size, with no softness anywhere.
+*Objective:* the original art looks crisp at every size, with no softness anywhere, and Wine stays invisible.
 
-- [ ] Get exact game pixels. Today the frame is resampled twice: Wine draws the 640 × 480 window into a Retina window at double size, then ScreenCaptureKit scales it back down. Fix it with a frame tap: a small DLL loaded into the game (as a proxy for `msimg32.dll` or `fmod.dll`, both loaded from the game folder) copies each finished frame into shared memory. That also removes the screen-recording permission and lets the Wine window stay hidden. Interim: Wine's Retina mode with capture at native backing size.
-- [ ] Remove Wine's Dock icon. With frames coming from the tap, Wine can run without its Mac display driver, so it never registers as an app. (Injecting a library into Wine to change its activation policy doesn't work: Wine's preloader skips the library's start-up code.)
-- [ ] Scale only by whole numbers with nearest-neighbour sampling (2×, 3×, 4×), centring with a border instead of stretching to odd sizes.
-- [ ] Add an optional smooth mode: a pixel-art upscaler (MMPX, xBR or ScaleFX, whichever has a licence that allows shipping) in a Metal renderer, so curves like the lemon's stay smooth at 4K.
+- [x] Exact game pixels from a frame tap. The in-game agent (`runtime/agent`, loaded by the game in place of `fmod.dll`) copies each finished 640 × 480 frame into a shared, double-buffered file (`remix-frames.bin`) about 60 times a second, and the app reads it directly. No screen capture or screen-recording permission is involved.
+- [x] Wine is invisible: with frames coming from the tap, Wine uses its headless display driver, so the game's windows are never shown and Wine never appears in the Dock or app switcher (checked from install to play: zero foreground Wine processes, zero on-screen Wine windows).
+- [x] Wine gets a private home folder, and its Desktop, Documents and similar folders are plain folders inside the app's setup, so macOS never asks for access to the player's files.
+- [x] Sharp mode (default) fills the window with crisp pixels at any size: inside each game pixel the colour is flat, and only the one screen pixel at its edge blends into the neighbour. At whole-number sizes it is exact.
+- [x] Pixel-Perfect mode (⌘2) keeps whole-number scaling with a border, for exact square pixels.
+- [x] Smoothing was tried (MetalFX) and dropped: it softens the pixel art.
+- [x] A high-resolution app icon (a lemonade glass in front of a striped stand, our own art) in every macOS size; an iOS master is saved alongside for G10.
 
-*Done when:* a captured frame at 2× matches the game's own pixels exactly (each game pixel becomes a clean 2 × 2 block), fullscreen on the built-in display and a 4K monitor shows no blur, and Chris picks the default look from side-by-side captures.
+*Done when:* the picture fills the window without blur at whole and fractional sizes (measured at 3× and 3.44×), and Chris approves the look. Higher-resolution art itself comes in G6.
 
 ## G4. Game state
 
@@ -129,6 +132,15 @@ Behaviour:
 - [ ] A signed app with Wine bundled (LGPL, with its source offered), a player README covering where to get their own installer, and a release checklist.
 - [ ] A clean-machine check, like PadMint's player check: a fresh user account with no developer tools, just the app and `Setup.exe`.
 - [ ] Publishing is Chris's decision.
+
+## G10. iPhone and iPad
+
+*Objective:* Lemonade Remixed as a resizable app on iOS and iPadOS.
+
+- [ ] Find a way to run the original there. Wine can't run on iOS, so this needs either the rebuild route (the documented mechanics plus the decoded art from G6) or an x86 emulator inside the app; decide with evidence from a simulator prototype.
+- [ ] Touch controls, any window size on iPad (Stage Manager, Split View), and the iOS icon (master in `mac/Resources/icon`).
+
+*Done when:* a full in-game week can be played in the iOS simulator at several sizes, then on Chris's devices.
 
 ## Fallback
 

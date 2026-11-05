@@ -1,9 +1,7 @@
 """Drive the original game's windows from inside Wine.
 
-  python winctl.py serve [GAME_DIR] [--visible]
-                                              launch the game and serve the
-                                              bridge (see bridge.py); windows
-                                              stay off-screen unless --visible
+  python winctl.py serve [GAME_DIR]           launch the game and serve the
+                                              bridge (see bridge.py)
   python winctl.py list                       top-level windows
   python winctl.py tree <hwnd>                child controls of a window
   python winctl.py click <hwnd>               BM_CLICK a button
@@ -54,18 +52,6 @@ def windows():
     return out
 
 
-OFFSCREEN = -4000
-
-
-def keep_hidden():
-    """Move every visible game window off-screen (the app shows the game)."""
-    for h in windows():
-        if u.IsWindowVisible(h) and text(h):
-            r = rect(h)
-            if r[0] > OFFSCREEN // 2:
-                u.SetWindowPos(h, 0, OFFSCREEN, OFFSCREEN, 0, 0, 0x0001 | 0x0004 | 0x0010)
-
-
 def children(h):
     out = []
     u.EnumChildWindows(h, ENUM(lambda c, _: out.append(c) or True), 0)
@@ -100,19 +86,8 @@ def main(a):
         # game when any other Windows process starts beside it.
         import contextlib, glob, io, os, subprocess
         global GAME_PROC
-        rest = [x for x in a[1:] if not x.startswith("--")]
-        game = rest[0] if rest else r"C:\Program Files (x86)\Lemonade Tycoon Deluxe"
-        hidden = "--visible" not in a
+        game = a[1] if len(a) > 1 else r"C:\Program Files (x86)\Lemonade Tycoon Deluxe"
         here = os.path.dirname(os.path.abspath(__file__))
-        if hidden:
-            import threading
-
-            def hide_forever():
-                while True:
-                    keep_hidden()
-                    time.sleep(0.015)
-
-            threading.Thread(target=hide_forever, daemon=True).start()
         GAME_PROC = subprocess.Popen([os.path.join(game, "Lemonade.exe")], cwd=game)
         exec(open(os.path.join(here, "bridge.py")).read(), globals())
         q = os.path.join(here, "q")

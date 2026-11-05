@@ -1,4 +1,4 @@
-/* Shared declarations for the FMOD proxy (freestanding: no C runtime). */
+/* Shared declarations for the in-game agent (freestanding: no C runtime). */
 #pragma once
 #include "count.h"
 
@@ -22,3 +22,5 @@ extern volatile long g_counts[EXPORT_COUNT];
 
 int same(const char *a, const char *b);
 int index_of_wrapped(const char *name);
+void agent_path(char *out, const char *file);   /* a file next to the DLL */
+void start_frame_tap(void);
