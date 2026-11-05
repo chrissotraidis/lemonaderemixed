@@ -1,0 +1,8 @@
+# Original game files stay on the player's machine.
+ref/
+work/
+*.exe
+*.dll
+*.RB
+*.dat
+.DS_Store
