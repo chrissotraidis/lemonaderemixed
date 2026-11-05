@@ -556,6 +556,27 @@ struct BodyView: View {
             .help(s.fast == 1 ? "Back to normal speed" : "Fast forward the day")
     }
 
+    /// Your cash, always in the same place: the bottom row of the small view and the
+    /// full game's header. Under it, today's profit while selling, else yesterday's.
+    @ViewBuilder private var cashChip: some View {
+        if model.hasGame {
+            let sub: (String, Int)? = model.running ? (signedMoney(s.today.profit) + " today", s.today.profit)
+                : (s.day > 0 && !s.report.isEmpty ? (signedMoney(s.report.earnings) + " yesterday", s.report.earnings) : nil)
+            HStack(spacing: 6) {
+                Image(systemName: "dollarsign.circle.fill").font(.system(size: 15, weight: .bold)).foregroundStyle(LT.yellow)
+                VStack(alignment: .leading, spacing: -4) {
+                    Text(money(s.cash)).font(LT.font(22)).foregroundStyle(LT.yellow)
+                    if let sub { Text(sub.0).font(LT.font(13)).foregroundStyle(sub.1 < 0 ? warnColor : LT.dim) }
+                }
+                .lineLimit(1).fixedSize()
+            }
+            .padding(.horizontal, 8).frame(height: 30)
+            .background(RoundedRectangle(cornerRadius: 5).fill(LT.panelDark))
+            .overlay(RoundedRectangle(cornerRadius: 5).stroke(LT.yellow.opacity(0.35), lineWidth: 1))
+            .help("Your cash")
+        }
+    }
+
     // MARK: Mini: the street while selling, the day's plan before
 
     private var miniView: some View {
@@ -597,9 +618,10 @@ struct BodyView: View {
                     .buttonStyle(NotchButtonStyle())
                     .help("Tuck it back into the notch")
                 soundButton
+                cashChip
                 Spacer()
                 if model.running {
-                    Button(action: assistant.skipDay) { Label("Skip day", systemImage: "forward.end.fill") }
+                    Button(action: assistant.skipDay) { Label("Skip", systemImage: "forward.end.fill") }
                         .buttonStyle(NotchButtonStyle())
                         .help("Play out the rest of the day at once")
                     fastButton
@@ -756,6 +778,7 @@ struct BodyView: View {
                     Text(detailLine).font(LT.font(14)).foregroundStyle(LT.dim).lineLimit(1)
                 }
                 Spacer(minLength: 4)
+                cashChip
                 if model.running { fastButton }
                 soundButton
                 Button(action: actions.openWindow) { Label("Window", systemImage: "macwindow") }
