@@ -26,10 +26,9 @@ final class AppController: NSObject, NSApplicationDelegate {
     var container: GameContainer!
     let assistant = AssistantModel()
     var notch: NotchController?
-    var notchEnabled: Bool {
-        get { UserDefaults.standard.object(forKey: "notch") as? Bool ?? true }
-        set { UserDefaults.standard.set(newValue, forKey: "notch") }
-    }
+    lazy var prefs = Prefs()
+    var notchEnabled: Bool { prefs.notch }
+    var settingsWindow: NSWindow?
     var showingGame = false
     var triedAutoKey = false
     var sawGame = false
@@ -75,6 +74,9 @@ final class AppController: NSObject, NSApplicationDelegate {
         }
         setup.onRegister = { [weak self] name, key in self?.register(name, key) }
         buildMenu()
+        prefs.onChange = { [weak self] in self?.applyPrefs() }
+        if let path = env["LEMONADE_TEST_CLICKS"] { watchTestClicks(path) }
+        if env["LEMONADE_SETTINGS_OPEN"] == "1" { showSettings() }   // testing
 
         if runtime.isInstalled {
             start()
@@ -188,14 +190,34 @@ final class AppController: NSObject, NSApplicationDelegate {
     @objc func showWhereToGet() { InfoWindows.showWhereToGet() }
     @objc func showAbout() { InfoWindows.showAbout() }
 
-    var picture: PictureMode {
-        PictureMode(rawValue: UserDefaults.standard.string(forKey: "picture") ?? "") ?? .sharp
-    }
+    var picture: PictureMode { prefs.picture }
 
     @objc func choosePicture(_ item: NSMenuItem) {
-        guard let mode = item.representedObject as? String else { return }
-        UserDefaults.standard.set(mode, forKey: "picture")
-        gameView.mode = picture
+        guard let mode = (item.representedObject as? String).flatMap(PictureMode.init(rawValue:)) else { return }
+        prefs.picture = mode
+    }
+
+    /// Settings changed (menu or Settings window): apply them.
+    func applyPrefs() {
+        gameView?.mode = picture
+        if !notchEnabled, showingGame {
+            showWindow()   // the game needs somewhere to be
+            if let s = settingsWindow, s.isVisible { s.makeKeyAndOrderFront(nil) }
+        }
+        updateNotch()
+    }
+
+    @objc func showSettings() {
+        if settingsWindow == nil {
+            let w = NSWindow(contentRect: .zero, styleMask: [.titled, .closable], backing: .buffered, defer: false)
+            w.title = "Lemonade Remixed Settings"
+            w.contentView = FirstClickHost(rootView: SettingsView(prefs: prefs, sound: sound))
+            w.isReleasedWhenClosed = false
+            w.center()
+            settingsWindow = w
+        }
+        settingsWindow?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
@@ -220,8 +242,7 @@ final class AppController: NSObject, NSApplicationDelegate {
     }
 
     @objc func toggleNotch() {
-        notchEnabled.toggle()
-        updateNotch()
+        prefs.notch.toggle()
     }
 
     /// Shows the notch on the built-in display (or the main screen) while the game runs.
@@ -246,7 +267,6 @@ final class AppController: NSObject, NSApplicationDelegate {
         if let log = env["LEMONADE_NOTCH_SELFTEST"] {
             DispatchQueue.main.asyncAfter(deadline: .now() + 14) { n.selfTest(log: log) }
         }
-        if let path = env["LEMONADE_NOTCH_CMDS"] { n.watchCommands(path) }   // testing
     }
 
     private func buildMenu() {
@@ -254,6 +274,7 @@ final class AppController: NSObject, NSApplicationDelegate {
         let appItem = NSMenuItem()
         let appMenu = NSMenu()
         appMenu.addItem(withTitle: "About Lemonade Remixed", action: #selector(showAbout), keyEquivalent: "")
+        appMenu.addItem(withTitle: "Settings…", action: #selector(showSettings), keyEquivalent: ",")
         appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "Quit Lemonade Remixed", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         appItem.submenu = appMenu
@@ -305,6 +326,35 @@ extension AppController: NSMenuItemValidation {
 /// run loop, where the reply it waits for can still be delivered.
 func quitSoon() {
     RunLoop.main.perform(inModes: [.common]) { NSApp.terminate(nil) }
+}
+
+/// Testing (LEMONADE_TEST_CLICKS=<file>): polls the file for lines like "click X Y"
+/// (screen points, top-left origin), clicks the app's own topmost window there,
+/// then empties the file. Nothing outside the app is touched.
+func watchTestClicks(_ path: String) {
+    let t = Timer(timeInterval: 0.3, repeats: true) { _ in
+        guard let text = try? String(contentsOfFile: path, encoding: .utf8), !text.isEmpty else { return }
+        try? "".write(toFile: path, atomically: true, encoding: .utf8)
+        for line in text.split(separator: "\n") {
+            let p = line.split(separator: " ")
+            guard p.count == 3, p[0] == "click", let x = Double(p[1]), let y = Double(p[2]) else { continue }
+            let pt = CGPoint(x: x, y: (NSScreen.screens.first?.frame.maxY ?? 0) - y)
+            // Topmost first: higher window level, then front-to-back order.
+            let order = NSApp.orderedWindows
+            let hit = NSApp.windows.filter { $0.isVisible && $0.frame.contains(pt) }.min {
+                ($0.level.rawValue, -(order.firstIndex(of: $0) ?? 999)) > ($1.level.rawValue, -(order.firstIndex(of: $1) ?? 999))
+            }
+            guard let w = hit else { continue }
+            let local = CGPoint(x: pt.x - w.frame.minX, y: pt.y - w.frame.minY)
+            for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+                if let e = NSEvent.mouseEvent(with: type, location: local, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                              windowNumber: w.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1) {
+                    w.sendEvent(e)
+                }
+            }
+        }
+    }
+    RunLoop.main.add(t, forMode: .common)
 }
 
 let app = NSApplication.shared

@@ -108,6 +108,7 @@ final class AssistantModel: ObservableObject {
             return "Bought " + items.joined(separator: ", ") + " for " + money(spent)
         }
         if replies.allSatisfy({ $0.hasPrefix("ok") }) { return "\(label): done" }
+        if replies.contains(where: { $0.contains("dialog") }) { return "The game is asking something" }
         return "\(label): " + replies.joined(separator: "; ")
     }
 
@@ -118,7 +119,15 @@ final class AssistantModel: ObservableObject {
 
     func buyBasket() { buy(basket); basket = [Int](repeating: 0, count: 12) }
     func restock() { buy(restockPlan) }
-    func startDay() { perform("Starting the day", ["startday"]) }
+    /// Starts the day, unless there's nothing to sell: then it says so instead of
+    /// letting the game stop you with its own message.
+    func startDay() {
+        guard state.cupsServable > 0 else {
+            lastResult = "Not enough supplies for a single cup. Restock first."
+            return
+        }
+        perform("Starting the day", ["startday"])
+    }
     func skipDay() { work.async { _ = Bridge.request("skip", timeout: 5) } }
 
     var shownRecipe: [Int] { draftRecipe ?? state.recipe }

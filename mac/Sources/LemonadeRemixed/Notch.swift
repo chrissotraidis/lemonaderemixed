@@ -540,7 +540,7 @@ struct BodyView: View {
                 }
             }
             Text(assistant.busy.map { $0 + "..." } ?? assistant.lastResult ?? (short ? "Serves \(s.cupsServable) cups; the forecast wants about \(expected)." : "Serves \(s.cupsServable) cups, enough for about \(expected). Ready."))
-                .font(LT.font(15)).foregroundStyle(assistant.busy == nil && short && assistant.lastResult == nil ? warnColor : LT.dim)
+                .font(LT.font(15)).foregroundStyle(assistant.busy == nil && (assistant.lastResult.map { $0.hasPrefix("Not enough") || $0.hasPrefix("The game") } ?? short) ? warnColor : LT.dim)
                 .lineLimit(1)
             if !assistant.recipes.isEmpty {
                 HStack(spacing: 5) {
@@ -817,31 +817,6 @@ final class NotchController {
 
     // MARK: Self-test (LEMONADE_NOTCH_SELFTEST=<log file>)
 
-    /// Testing: polls `path` for lines like "click X Y" (screen points, top-left
-    /// origin), runs them as clicks on the notch's own windows, then empties it.
-    func watchCommands(_ path: String) {
-        let t = Timer(timeInterval: 0.3, repeats: true) { [weak self] _ in
-            guard let self, let text = try? String(contentsOfFile: path, encoding: .utf8), !text.isEmpty else { return }
-            try? "".write(toFile: path, atomically: true, encoding: .utf8)
-            for line in text.split(separator: "\n") {
-                let p = line.split(separator: " ")
-                guard p.count == 3, p[0] == "click", let x = Double(p[1]), let y = Double(p[2]) else { continue }
-                let top = NSScreen.screens.first?.frame.maxY ?? 0
-                let pt = CGPoint(x: x, y: top - y)
-                for panel in [self.island, self.bodyPanel] where panel.isVisible && panel.frame.contains(pt) {
-                    let local = CGPoint(x: pt.x - panel.frame.minX, y: pt.y - panel.frame.minY)
-                    for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
-                        if let e = NSEvent.mouseEvent(with: type, location: local, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
-                                                      windowNumber: panel.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1) {
-                            panel.sendEvent(e)
-                        }
-                    }
-                    break
-                }
-            }
-        }
-        RunLoop.main.add(t, forMode: .common)
-    }
 
     func selfTest(log path: String) {
         func note(_ s: String) {

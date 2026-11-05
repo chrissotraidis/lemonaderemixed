@@ -106,8 +106,13 @@ def start_day():
     err = _ready()
     if err:
         return err
-    _click(266, 468, 0.3)
-    return "ok" if _wait_screen("day", 3) else "no: " + screen()
+    _click(266, 468, 0.1)
+    # Return as soon as the day runs or the game asks something (e.g. not enough supplies).
+    end = time.time() + 3
+    while time.time() < end and screen() not in ("day", "dialog"):
+        time.sleep(0.05)
+    s = screen()
+    return "ok" if s == "day" else "no: " + s
 
 
 def skip_day():
