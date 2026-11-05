@@ -100,6 +100,11 @@ final class AssistantModel: ObservableObject {
     func restock() { buy(restockPlan) }
     func startDay() { perform("Starting the day", ["startday"]) }
 
+    /// Fast-forward on or off, without the busy indicator (it's instant).
+    func setFast(_ on: Bool) {
+        work.async { _ = Bridge.request("fast " + (on ? "on" : "off"), timeout: 5) }
+    }
+
     func apply(_ r: SavedRecipe) {
         perform(r.name, ["recipe \(r.lemons) \(r.sugar) \(r.ice)", "price \(r.price)"])
     }

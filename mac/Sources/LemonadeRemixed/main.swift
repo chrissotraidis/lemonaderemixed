@@ -221,11 +221,13 @@ final class AppController: NSObject, NSApplicationDelegate {
         guard showingGame, notchEnabled else { notch?.close(); notch = nil; return }
         guard notch == nil, let screen = NSScreen.screens.first(where: { $0.auxiliaryTopLeftArea != nil }) ?? NSScreen.main else { return }
         let n = NotchController(screen: screen, sound: sound, link: link,
-                                openWindow: { [weak self] in self?.notch?.set(.collapsed); self?.showWindow() })
+                                startDay: { [weak self] in self?.assistant.startDay() },
+                                fast: { [weak self] on in self?.assistant.setFast(on) },
+                                openWindow: { [weak self] in self?.notch?.set(.mini); self?.showWindow() })
         n.start(frames: runtime.framesFile)
         n.model.update(assistant.state, tip: assistant.tips.first)
         notch = n
-        if env["LEMONADE_NOTCH"] == "open" { n.set(.open) }   // testing
+        if env["LEMONADE_NOTCH"] == "full" { n.set(.full) } else if env["LEMONADE_NOTCH"] == "mini" { n.set(.mini) }   // testing
         if let seconds = env["LEMONADE_NOTCH_CLOSE_AFTER"].flatMap(Double.init) {   // testing
             DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { n.set(.collapsed) }
         }

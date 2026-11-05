@@ -93,6 +93,15 @@ def set_price(cents):
     return ("ok %d" if ok else "partial %d") % game_state()["price"]
 
 
+def set_fast(on):
+    """Fast-forward during the day: the game's own >> button, toggled only if needed."""
+    if screen() != "day":
+        return "busy: no day running"
+    if (game_state().get("fast") == 1) != on:
+        _click(557, 352, 0.3)
+    return "ok %d" % game_state().get("fast", 0)
+
+
 def start_day():
     err = _ready()
     if err:

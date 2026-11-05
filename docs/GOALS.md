@@ -72,30 +72,20 @@ Chris's first look (5 November) found the notch and picture not good enough: the
 - [ ] Still unmapped: popularity, satisfaction, upgrades and staff owned, advertising. Needed for the notch's popularity meter and the stand sprite's upgrade level.
 - [ ] Volume levels beyond mute (music/effects sliders) through the in-game agent.
 
-## G5. The game in the notch (first version built)
+## G5. The game in the notch (second version built, waiting for Chris)
 
-Built on 5 November: collapsed wings (the live cart cropped from the game's town view, a running dot during the day, weather, cash and day/high or cups sold), a peek on hover (the live town view, day, location, forecast, the top tip, start day / skip / play / sound), and play mode (the full game at 1×, clickable, with sound, window and close). The game keeps running in every state. Still open: the yellow pulse at day end needs a check on screen, Esc and click-away collapse, the no-notch pill, and Chris's working session.
+*Objective:* the stand lives in the notch while you work. You glance at it for status, open a live street view with speed controls, and open the whole game when you want to play.
 
+Three states, and the game keeps running in all of them:
 
-*Objective:* the stand lives in the notch while you work. You glance at it for status, and hover or click to play the whole game.
-
-Collapsed (the full menu-bar height, both sides of the notch, no game UI crops):
-
-- [ ] Left: the stand, drawn with the game's own stand sprite and the current weather icon; customers appear as a small queue while a day runs.
-- [ ] Right: cash in the game's yellow, and today's cups sold or the forecast high when planning.
-- [ ] A short pulse when the day ends, and a dot when the assistant has an important tip (out of stock, rent pressure).
-
-Peek (hover):
-
-- [ ] A Dynamic Island–style panel springs out of the notch in the game's style: the live town view with the stand, today's numbers, the top tip, and big game-style buttons for Start Day, Skip, a saved recipe and mute.
-
-Play (click):
-
-- [ ] The panel grows into the full game at a whole-number scale, playable with the mouse, with the assistant available; Esc or clicking away collapses it. The game keeps running in every state.
-
-Behaviour:
-
-- [ ] Works without a notch (a pill at the top centre), across Spaces and over fullscreen apps; a setting chooses window, notch or both.
+- [x] **Island** (collapsed): black wings on both sides of the notch at full menu-bar height. Left: cash in the game's yellow, cups sold today (or the day number), and a live crop of your cart. Right: a small fast-forward toggle during the day (yellow when on) and the temperature if there is room, or the forecast high while planning. The right wing measures the free menu-bar space every 3 seconds and never covers other apps' icons; with under 30 points free it stays empty.
+- [x] **Street view** (mini): a panel under the notch with the live street around your cart at 2× (customers walking up and buying), drawn at the game's own frame rate on a plain layer. Today's numbers float in the corners. Buttons with icons and words: Hide, Sound, Fast (during a day), Start day (while planning), Full game. Clicking the picture opens the full game.
+- [x] **Full game**: the whole game at 1×, playable, in the game's green with a header showing the day, the weather and today's sales, plus Fast, Sound, Window (move to its own window) and Shrink.
+- [x] Clicking the notch toggles island ↔ street view (from the full game, back to the street view). Clicking anywhere else, or Esc, shrinks the full game to the street view, which stays open while you work. Transitions take 0.16 s.
+- [ ] Chris's verdict on the island's right wing (what it should show) and on the street view's smoothness.
+- [ ] The yellow pulse at day end, checked on screen.
+- [ ] Without a notch: a pill at the top centre. Across Spaces and over fullscreen apps; a setting chooses window, notch or both.
+- [ ] Popularity, satisfaction and owned upgrades mapped in memory, for the street view.
 
 *Done when:* a full in-game week can be played from the notch, then Chris uses it for a working session.
 

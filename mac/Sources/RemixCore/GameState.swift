@@ -17,6 +17,7 @@ public struct GameState: Codable, Equatable {
     public var tempsC = [0, 0, 0]
     public var running = 0
     public var location = 0, rent = 0
+    public var fast = 0                    // 1 while fast-forwarding
     public var today = Today()
     public var report = Report()
 
