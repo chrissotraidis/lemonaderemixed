@@ -46,7 +46,7 @@ struct NotchLayout {
             first = min(first, x)
         }
         let room = first - notch.maxX - 6
-        return room < 36 ? 0 : min(Self.maxRight, room).rounded(.down)
+        return room < 22 ? 0 : min(Self.maxRight, room).rounded(.down)
     }
 
     func island(right: CGFloat) -> CGRect {
@@ -378,7 +378,7 @@ struct IslandView: View {
                         Text(extra.0).font(LT.font(h * 0.5)).foregroundStyle(.white)
                         Text(extra.1).font(LT.font(h * 0.38)).foregroundStyle(LT.dim)
                     }
-                    .lineLimit(1).minimumScaleFactor(0.6)
+                    .lineLimit(1).minimumScaleFactor(0.45)
                 }
             }
             .padding(.trailing, 8)
@@ -455,7 +455,7 @@ struct IslandView: View {
             let item = items[min(i, items.count - 1)]
             ZStack {
                 Text(item.text).font(LT.font(h * 0.42)).foregroundStyle(item.color)
-                    .lineLimit(1).minimumScaleFactor(0.6)
+                    .lineLimit(1).minimumScaleFactor(0.45)
                     .id(items.count > 1 ? i : 0)
                     .transition(.opacity)
             }
