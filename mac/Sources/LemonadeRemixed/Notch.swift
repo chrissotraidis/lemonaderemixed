@@ -401,7 +401,7 @@ struct IslandView: View {
             // The street goes on, with fast-forward and the numbers laid over it, small.
             // Clicking here toggles fast-forward while selling.
             street(halves(h).1, h, leading: false, alone: false)
-                .overlay { info(h) }
+                .overlay { if model.hasGame { info(h) } }
                 .padding(.trailing, 4)
         }
     }
@@ -413,22 +413,48 @@ struct IslandView: View {
         Group {
             if model.hasGame {
                 GameCrop(model: model, rect: rect)
-            } else if leading {
-                Image(nsImage: NSApp.applicationIconImage).resizable().interpolation(.high).aspectRatio(contentMode: .fit)
-                    .rotationEffect(.degrees(bob ? 6 : -6))
-                    .offset(y: bob ? -1 : 1)
-                    .animation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true), value: bob)
-                    .onAppear { bob = true }
             } else {
-                Color.clear
+                title(h, leading: leading)
             }
         }
+        .id(model.hasGame)
+        .transition(.opacity)
         .frame(maxWidth: .infinity).frame(height: h - 4)
         .clipShape(UnevenRoundedRectangle(topLeadingRadius: outer ? r : 0, bottomLeadingRadius: outer ? r : 0,
                                           bottomTrailingRadius: inner ? r : 0, topTrailingRadius: inner ? r : 0))
+        .animation(.easeInOut(duration: 0.6), value: model.hasGame)
     }
 
     @State private var bob = false
+
+    /// Before a career is open: the game's own main-menu art on its stripes. Left, the
+    /// play! stand tile; right, the menu's lemon, gently bobbing. While the game
+    /// starts, the stripes and the app icon.
+    @ViewBuilder private func title(_ h: CGFloat, leading: Bool) -> some View {
+        let menu = model.screen == "menu"
+        ZStack {
+            Stripes(px: 0.6)
+            if menu && leading {
+                GameCrop(model: model, rect: CGRect(x: 9, y: 61, width: 60, height: 50))   // play!
+                    .frame(width: (h - 6) * 1.2, height: h - 6)
+                    .clipShape(RoundedRectangle(cornerRadius: 3))
+            } else {
+                Group {
+                    if menu {
+                        GameCrop(model: model, rect: CGRect(x: 114, y: 62, width: 34, height: 32))   // the lemon
+                            .frame(width: (h - 8) * 34 / 32, height: h - 8)
+                    } else if leading {
+                        Image(nsImage: NSApp.applicationIconImage).resizable().interpolation(.high)
+                            .aspectRatio(contentMode: .fit).frame(height: h - 8)
+                    }
+                }
+                .rotationEffect(.degrees(bob ? 7 : -7))
+                .offset(y: bob ? -1.5 : 1.5)
+                .animation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true), value: bob)
+                .onAppear { bob = true }
+            }
+        }
+    }
 
     /// Fast-forward (while selling) and the numbers taking turns, small and see-through.
     private func info(_ h: CGFloat) -> some View {
