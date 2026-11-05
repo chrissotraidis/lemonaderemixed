@@ -66,6 +66,13 @@ final class AppController: NSObject, NSApplicationDelegate {
         }
         window.makeKeyAndOrderFront(nil)
         setup.onChoose = { [weak self] in self?.chooseInstaller() }
+        // Whenever the game window comes up (Dock, a minimized thumbnail, a click),
+        // the notch tucks back into its island: the game shows in one place at a time.
+        for name in [NSWindow.didBecomeKeyNotification, NSWindow.didDeminiaturizeNotification] {
+            NotificationCenter.default.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
+                self?.notch?.set(.collapsed)
+            }
+        }
         setup.onRegister = { [weak self] name, key in self?.register(name, key) }
         buildMenu()
 

@@ -555,10 +555,12 @@ struct BodyView: View {
             if let tip = assistant.tips.first {
                 HStack(alignment: .top, spacing: 5) {
                     Image(systemName: "lightbulb.fill").font(.system(size: 11)).foregroundStyle(LT.yellow).padding(.top, 2)
-                    Text(tip).font(LT.font(15)).foregroundStyle(.white).lineLimit(3).fixedSize(horizontal: false, vertical: true)
+                    Text(tip).font(LT.font(15)).foregroundStyle(.white).minimumScaleFactor(0.75)
+                        .frame(maxHeight: .infinity, alignment: .topLeading)
                 }
+            } else {
+                Spacer(minLength: 0)
             }
-            Spacer(minLength: 0)
         }
         .padding(8)
         .background(RoundedRectangle(cornerRadius: 8).fill(LT.panel))
