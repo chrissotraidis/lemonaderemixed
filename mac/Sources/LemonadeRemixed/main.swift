@@ -54,6 +54,9 @@ final class AppController: NSObject, NSApplicationDelegate {
         window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 960, height: 720),
                           styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
         window.title = "Lemonade Remixed"
+        // Closing the window only hides it: the notch and the Dock bring it back,
+        // so it must never be freed (that crashed the notch's next click).
+        window.isReleasedWhenClosed = false
         window.collectionBehavior = [.fullScreenPrimary]
         let setupHost = NSHostingView(rootView: SetupView(model: setup))
         setupHost.sizingOptions = []   // the window sets the size, not the content
@@ -71,6 +74,10 @@ final class AppController: NSObject, NSApplicationDelegate {
             NotificationCenter.default.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
                 self?.notch?.set(.collapsed)
             }
+        }
+        // Closing the window (red button) with the notch on: the game carries on in the notch's small view.
+        NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { [weak self] _ in
+            DispatchQueue.main.async { self?.notch?.set(.mini) }
         }
         setup.onRegister = { [weak self] name, key in self?.register(name, key) }
         buildMenu()
@@ -235,6 +242,12 @@ final class AppController: NSObject, NSApplicationDelegate {
         return true
     }
 
+    /// Switching to the app (⌘Tab) while the game lives in the notch opens the notch's small view.
+    func applicationDidBecomeActive(_ note: Notification) {
+        guard showingGame, let notch, !window.isVisible, settingsWindow?.isVisible != true, notch.model.mode == .collapsed else { return }
+        notch.set(.mini)
+    }
+
     @objc func showWindow() {
         notch?.set(.collapsed)
         window.makeKeyAndOrderFront(nil)
@@ -247,7 +260,7 @@ final class AppController: NSObject, NSApplicationDelegate {
 
     /// Shows the notch on the built-in display (or the main screen) while the game runs.
     func updateNotch() {
-        guard showingGame, notchEnabled else { notch?.close(); notch = nil; return }
+        guard showingGame, notchEnabled, env["LEMONADE_NOTCH"] != "off" else { notch?.close(); notch = nil; return }
         guard notch == nil, let screen = NSScreen.screens.first(where: { $0.auxiliaryTopLeftArea != nil }) ?? NSScreen.main else { return }
         let n = NotchController(screen: screen, sound: sound, link: link, assistant: assistant,
                                 openWindow: { [weak self] in self?.showWindow() })
@@ -336,6 +349,10 @@ func watchTestClicks(_ path: String) {
         guard let text = try? String(contentsOfFile: path, encoding: .utf8), !text.isEmpty else { return }
         try? "".write(toFile: path, atomically: true, encoding: .utf8)
         for line in text.split(separator: "\n") {
+            if line == "close" {   // the red button on the game window
+                NSApp.windows.first { $0.styleMask.contains(.titled) && $0.isVisible && $0.title == "Lemonade Remixed" }?.performClose(nil)
+                continue
+            }
             let p = line.split(separator: " ")
             guard p.count == 3, p[0] == "click", let x = Double(p[1]), let y = Double(p[2]) else { continue }
             let pt = CGPoint(x: x, y: (NSScreen.screens.first?.frame.maxY ?? 0) - y)
