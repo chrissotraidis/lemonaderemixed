@@ -37,7 +37,7 @@ Proves the plumbing only: live frames from the Wine window via ScreenCaptureKit,
 
 Chris's first look (5 November) found the notch and picture not good enough: the strip wastes the space and shows unexplained crops, the expansion crams the whole desktop interface under the notch, the picture is soft, and the transition jerks. Those findings are now requirements in G3 to G5.
 
-## G2. It just works ✅ (waiting for Chris's play check)
+## G2. It just works ✅
 
 *Objective:* one app that takes a player from a fresh Mac to playing without ever seeing Wine.
 
@@ -51,7 +51,7 @@ Chris's first look (5 November) found the notch and picture not good enough: the
 
 *Done when:* starting from an empty Application Support folder, choosing `Setup.exe` leads to the main menu in under a minute with no Wine window or dialog on screen, and saves survive a relaunch. Measured on 5 November: 21 seconds, no Wine window, saves intact. Chris played it on 5 November: it works.
 
-## G3. A sharp picture ✅ (waiting for Chris's look)
+## G3. A sharp picture ✅
 
 *Objective:* the original art looks crisp at every size, with no softness anywhere, and Wine stays invisible.
 
