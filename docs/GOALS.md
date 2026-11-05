@@ -72,7 +72,10 @@ Chris's first look (5 November) found the notch and picture not good enough: the
 - [ ] Still unmapped: popularity, satisfaction, upgrades and staff owned, advertising. Needed for the notch's popularity meter and the stand sprite's upgrade level.
 - [ ] Volume levels beyond mute (music/effects sliders) through the in-game agent.
 
-## G5. The game in the notch
+## G5. The game in the notch (first version built)
+
+Built on 5 November: collapsed wings (the live cart cropped from the game's town view, a running dot during the day, weather, cash and day/high or cups sold), a peek on hover (the live town view, day, location, forecast, the top tip, start day / skip / play / sound), and play mode (the full game at 1×, clickable, with sound, window and close). The game keeps running in every state. Still open: the yellow pulse at day end needs a check on screen, Esc and click-away collapse, the no-notch pill, and Chris's working session.
+
 
 *Objective:* the stand lives in the notch while you work. You glance at it for status, and hover or click to play the whole game.
 
@@ -111,9 +114,9 @@ Parked on 5 November: the original art looks good drawn sharp, and upscaling hun
 
 *Done when:* the interface and then the town view render in HD with exact placement and no flicker, and Chris approves the look.
 
-## G7. Assistant and quality of life ✅ (waiting for Chris's play check)
+## G7. Advisor and quality of life ✅
 
-An assistant panel beside the game, drawn in the game's own style (its stripes, panels, buttons and a pixel font), scaled with the picture, and folded away with a game-style arrow or ⌘\\.
+The Advisor is a game-style button beside the game's speaker; it opens over the game's left panel like another tab and has a dot when there's a new report or an urgent tip. Chris approved the look on 5 November; it starts closed.
 
 - [x] Morning tips from the forecast, stock and yesterday's report (ice for heat, price for sun or rain, restock warnings, walk-aways, melting ice, rent pressure). While a day runs it shows live cups, profit and walk-aways.
 - [x] Day report: the game's own numbers for the last day, until dismissed.

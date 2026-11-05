@@ -84,7 +84,19 @@ final class GameView: NSView {
         return CGPoint(x: (p.x - r.minX) / r.width * s.width, y: (p.y - r.minY) / r.height * s.height)
     }
 
-    override func mouseDown(with e: NSEvent) { if let p = gamePoint(e) { link.mouse("down", p) } }
+    override var acceptsFirstResponder: Bool { true }
+
+    /// Typing (company names) goes to the game as characters.
+    override func keyDown(with e: NSEvent) {
+        guard let chars = e.characters, !chars.isEmpty, !e.modifierFlags.contains(.command) else { return super.keyDown(with: e) }
+        switch e.keyCode {
+        case 51: link.send("char \u{8}")
+        case 36, 76: link.send("char \r")
+        default: link.send("char " + chars)
+        }
+    }
+
+    override func mouseDown(with e: NSEvent) { window?.makeFirstResponder(self); if let p = gamePoint(e) { link.mouse("down", p) } }
     override func mouseUp(with e: NSEvent) { if let p = gamePoint(e) { link.mouse("up", p) } }
     override func mouseDragged(with e: NSEvent) { move(e) }
     override func mouseMoved(with e: NSEvent) { move(e) }

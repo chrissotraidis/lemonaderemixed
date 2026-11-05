@@ -138,7 +138,7 @@ def client(conn):
     with conn, conn.makefile("rw", newline="\n") as f:
         for line in f:
             try:
-                f.write(handle(line.rstrip("\r\n")) + "\n")
+                f.write(handle(line.rstrip("\n")) + "\n")
             except Exception as e:
                 f.write("error " + repr(e) + "\n")
             f.flush()

@@ -25,6 +25,11 @@ final class AppController: NSObject, NSApplicationDelegate {
     var gameView: GameView!
     var container: GameContainer!
     let assistant = AssistantModel()
+    var notch: NotchController?
+    var notchEnabled: Bool {
+        get { UserDefaults.standard.object(forKey: "notch") as? Bool ?? true }
+        set { UserDefaults.standard.set(newValue, forKey: "notch") }
+    }
     var showingGame = false
     var triedAutoKey = false
     var sawGame = false
@@ -161,6 +166,8 @@ final class AppController: NSObject, NSApplicationDelegate {
         window.contentAspectRatio = GameView.gameSize
         gameView.show(frames: runtime.framesFile)
         assistant.start()
+        assistant.onState = { [weak self] s in self?.notch?.model.update(s, tip: self?.assistant.tips.first) }
+        updateNotch()
         if let test = env["LEMONADE_SELFTEST"] {
             DispatchQueue.main.asyncAfter(deadline: .now() + 12) { self.link.send(test) }
         }
@@ -192,7 +199,39 @@ final class AppController: NSObject, NSApplicationDelegate {
         return .terminateLater
     }
 
-    func applicationShouldTerminateAfterLastWindowClosed(_ app: NSApplication) -> Bool { true }
+    func applicationShouldTerminateAfterLastWindowClosed(_ app: NSApplication) -> Bool { !(showingGame && notchEnabled) }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        showWindow()
+        return true
+    }
+
+    @objc func showWindow() {
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    @objc func toggleNotch() {
+        notchEnabled.toggle()
+        updateNotch()
+    }
+
+    /// Shows the notch on the built-in display (or the main screen) while the game runs.
+    func updateNotch() {
+        guard showingGame, notchEnabled else { notch?.close(); notch = nil; return }
+        guard notch == nil, let screen = NSScreen.screens.first(where: { $0.auxiliaryTopLeftArea != nil }) ?? NSScreen.main else { return }
+        let n = NotchController(screen: screen, sound: sound, link: link,
+                                startDay: { [weak self] in self?.assistant.startDay() },
+                                openWindow: { [weak self] in self?.notch?.set(.collapsed); self?.showWindow() })
+        n.start(frames: runtime.framesFile)
+        n.model.update(assistant.state, tip: assistant.tips.first)
+        notch = n
+        switch env["LEMONADE_NOTCH"] {   // testing: open the notch in a given state
+        case "peek": n.set(.peek)
+        case "play": n.set(.play)
+        default: break
+        }
+    }
 
     private func buildMenu() {
         let menu = NSMenu()
@@ -221,6 +260,8 @@ final class AppController: NSObject, NSApplicationDelegate {
         gameMenu.addItem(.separator())
         gameMenu.addItem(withTitle: "Toggle Full Screen", action: #selector(NSWindow.toggleFullScreen(_:)), keyEquivalent: "f")
         gameMenu.addItem(withTitle: "Advisor", action: #selector(toggleAdvisor), keyEquivalent: "\\")
+        gameMenu.addItem(withTitle: "Show in Notch", action: #selector(toggleNotch), keyEquivalent: "")
+        gameMenu.addItem(withTitle: "Show Game Window", action: #selector(showWindow), keyEquivalent: "0")
         gameItem.submenu = gameMenu
         menu.addItem(gameItem)
         let helpItem = NSMenuItem()
@@ -237,6 +278,7 @@ extension AppController: NSMenuItemValidation {
     func validateMenuItem(_ item: NSMenuItem) -> Bool {
         if item.action == #selector(toggleMute) { item.state = sound.muted ? .on : .off }
         if item.action == #selector(setVolumeLevel(_:)) { item.state = !sound.muted && sound.volume == item.tag ? .on : .off }
+        if item.action == #selector(toggleNotch) { item.state = notchEnabled ? .on : .off }
         if item.action == #selector(toggleAdvisor) { item.state = container?.advisor.open == true ? .on : .off }
         if item.action == #selector(choosePicture(_:)) { item.state = (item.representedObject as? String) == picture.rawValue ? .on : .off }
         return true
