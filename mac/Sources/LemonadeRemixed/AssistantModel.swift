@@ -11,7 +11,9 @@ struct SavedRecipe: Codable, Identifiable, Equatable {
 /// Live game state for the assistant, plus the actions it offers.
 final class AssistantModel: ObservableObject {
     @Published private(set) var state = GameState()
-    @Published private(set) var busy: String?
+    @Published private(set) var busy: String? { didSet { if (busy == nil) != (oldValue == nil) { onBusy?(busy != nil) } } }
+    /// Called when an action starts or finishes (the notch holds its picture meanwhile).
+    var onBusy: ((Bool) -> Void)?
     @Published private(set) var lastResult: String?
     @Published var recipes: [SavedRecipe] = [] { didSet { saveRecipes() } }
     @Published var basket = [Int](repeating: 0, count: 12)

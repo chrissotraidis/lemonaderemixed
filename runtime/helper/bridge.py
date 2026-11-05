@@ -22,6 +22,9 @@ GAME_TITLE = "Lemonade Tycoon Deluxe"
 KEY_DIALOGS = ("Reminder", "Enter Key", "Error!")
 PORT = int(os.environ.get("REMIX_PORT", "47123"))
 BM_CLICK = 0x00F5
+# Actions click through the game's own screens; two at once would interleave their clicks.
+ACTION_LOCK = threading.Lock()
+ACTIONS = ("buy", "recipe", "price", "fast", "startday", "skip")
 
 
 def visible(title):
@@ -93,12 +96,19 @@ def register(name, key):
 def handle(line):
     parts = line.split(" ", 1)
     cmd, arg = parts[0], parts[1] if len(parts) > 1 else ""
+    if cmd in ACTIONS:
+        with ACTION_LOCK:
+            return _action(cmd, arg)
     if cmd == "ping":
         return "pong"
     if cmd == "state":
         return state()
     if cmd == "info":
         return game_state_json()
+    return _other(cmd, arg)
+
+
+def _action(cmd, arg):
     if cmd == "buy":
         return buy([int(v) for v in arg.split()])
     if cmd == "recipe":
@@ -109,8 +119,10 @@ def handle(line):
         return set_fast(arg.strip() == "on")
     if cmd == "startday":
         return start_day()
-    if cmd == "skip":
-        return skip_day()
+    return skip_day()
+
+
+def _other(cmd, arg):
     if cmd == "register":
         name, _, key = arg.partition("\t")
         return register(name, key)

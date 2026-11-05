@@ -14,6 +14,8 @@ struct NotchLayout {
     /// Each side of the notch when both are free; the left side alone when the right is taken.
     static let wing: CGFloat = 96, soloWing: CGFloat = 120
     static let maxRight: CGFloat = wing
+    /// How far the closed island dips below the notch, for the outline that joins its two sides.
+    static let lip: CGFloat = 3
     static func leftWidth(right: CGFloat) -> CGFloat { right > 0 ? right : soloWing }
     static let fastGlyph = CGRect(x: 6, y: 5, width: 26, height: 22)    // in the right wing, top-left origin
 
@@ -49,7 +51,7 @@ struct NotchLayout {
 
     func island(right: CGFloat) -> CGRect {
         let left = hasNotch ? Self.leftWidth(right: right) : 0
-        return CGRect(x: notch.minX - left, y: top, width: left + notch.width + right, height: stripHeight)
+        return CGRect(x: notch.minX - left, y: top - Self.lip, width: left + notch.width + right, height: stripHeight + Self.lip)
     }
 
     static let miniWidth: CGFloat = 600, view = CGSize(width: 292, height: 108), viewScale: CGFloat = 2
@@ -95,8 +97,8 @@ final class NotchModel: ObservableObject {
 
     /// Height of the small view's picture: the game's menus and its questions need more room.
     var viewHeight: CGFloat {
-        if state.screen == "dialog" { return NotchLayout.dialog.height }
-        if state.screen == "plan" { return NotchLayout.menus.height }
+        if screen == "dialog" { return NotchLayout.dialog.height }
+        if screen == "plan" { return NotchLayout.menus.height }
         return NotchLayout.view.height * NotchLayout.viewScale
     }
     private var tap: FrameTap?
@@ -104,10 +106,23 @@ final class NotchModel: ObservableObject {
     private var lastScan = Date.distantPast
     private var sinks = NSHashTable<FrameLayerView>.weakObjects()
 
-    var inGame: Bool { ["plan", "day"].contains(state.screen) }
+    /// While an action clicks through the game's screens (restock, recipe, start day),
+    /// the notch holds its picture and layout so none of that flickers by.
+    @Published var hold = false {
+        didSet {
+            guard hold != oldValue else { return }
+            heldScreen = state.screen
+            if !hold { if let frame { for view in sinks.allObjects { view.show(frame) } }; relayout?() }
+        }
+    }
+    private var heldScreen = "plan"
+    /// The screen the notch shows: the real one, or the one from before an action started.
+    var screen: String { hold ? heldScreen : state.screen }
+
+    var inGame: Bool { ["plan", "day"].contains(screen) }
     /// A career is open, even if the game is asking a question right now.
-    var hasGame: Bool { inGame || state.screen == "dialog" }
-    var running: Bool { state.screen == "day" }
+    var hasGame: Bool { inGame || screen == "dialog" }
+    var running: Bool { screen == "day" }
 
     func start(frames url: URL) {
         tap = FrameTap(url: url)
@@ -146,7 +161,7 @@ final class NotchModel: ObservableObject {
             lastScan = Date()
             if let c = Self.findCart(image), c != cart { cart = c }
         }
-        for view in sinks.allObjects { view.show(image) }
+        if !hold { for view in sinks.allObjects { view.show(image) } }
     }
 
     /// A strip of the town view with the cart cartAt game pixels from its left edge, kept inside the town view.
@@ -311,6 +326,7 @@ struct IslandView: View {
 
     var body: some View {
         let h = layout.stripHeight
+        let shape = UnevenRoundedRectangle(bottomLeadingRadius: open ? 0 : 10, bottomTrailingRadius: open ? 0 : 10)
         HStack(spacing: 0) {
             if layout.hasNotch {
                 left(h).frame(width: leftW)
@@ -321,19 +337,33 @@ struct IslandView: View {
             }
         }
         .frame(height: h)
-        .background(UnevenRoundedRectangle(bottomLeadingRadius: open ? 0 : 10, bottomTrailingRadius: open ? 0 : 10).fill(.black))
+        // Closed, the island dips a few points below the notch so a lemon outline can run
+        // under it and tie both sides into one piece.
+        .frame(height: open ? h : h + NotchLayout.lip, alignment: .top)
+        .background(shape.fill(.black))
+        .overlay(alignment: .topLeading) {
+            if !open {
+                let line = LT.yellow.opacity(model.pulse ? 1 : 0.8), width: CGFloat = model.pulse ? 2.5 : 1.5
+                if split {
+                    shape.inset(by: 0.75).stroke(line, lineWidth: width)
+                } else {
+                    // Left side only: the outline goes round just that side.
+                    UnevenRoundedRectangle(bottomLeadingRadius: 10, bottomTrailingRadius: 10).inset(by: 0.75)
+                        .stroke(line, lineWidth: width).frame(width: leftW)
+                }
+            }
+        }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .animation(.easeInOut(duration: 0.3), value: model.pulse)
     }
 
-    /// One strip of street cut in two by the notch: your cart in the left half,
-    /// the street running on in the right half. Game pixels, top-left origin.
+    /// One strip of street cut in two by the notch: your cart centred on the left side,
+    /// the street running on along the right side. Game pixels, top-left origin.
     private func halves(_ h: CGFloat) -> (CGRect, CGRect) {
         let gameH: CGFloat = 40
         let k = gameH / (h - 4)
-        let lw = ((leftW - 6) * k).rounded(), rw = split ? ((model.right - 6) * k).rounded() : 0
-        // Split: the cart centred on the left side. Left side only: the cart near its left,
-        // leaving the right part of the picture for the cash.
-        let strip = model.strip(width: lw + rw, height: gameH, cartAt: split ? lw / 2 : lw * 0.28)
+        let lw = ((leftW - 4) * k).rounded(), rw = split ? ((model.right - 4) * k).rounded() : 0
+        let strip = model.strip(width: lw + rw, height: gameH, cartAt: split ? lw / 2 : lw * 0.4)
         return (CGRect(x: strip.minX, y: strip.minY, width: lw, height: gameH),
                 CGRect(x: strip.minX + lw, y: strip.minY, width: rw, height: gameH))
     }
@@ -353,19 +383,10 @@ struct IslandView: View {
             }
             .padding(.trailing, 8)
         } else {
-            street(halves(h).0, h, leading: true)
-                .overlay(alignment: .trailing) { if !split { slide(h).padding(.trailing, 3) } }
-                .overlay(alignment: .leading) {
-                    if model.running {
-                        Image(systemName: "forward.fill")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(s.fast == 1 ? LT.buttonShadow : .white)
-                            .frame(width: NotchLayout.fastGlyph.width, height: NotchLayout.fastGlyph.height)
-                            .background(RoundedRectangle(cornerRadius: 5).fill(s.fast == 1 ? LT.yellow : Color.black.opacity(0.65)))
-                            .help(s.fast == 1 ? "Normal speed" : "Fast forward")
-                    }
-                }
-                .padding(.leading, NotchLayout.fastGlyph.minX)
+            // Just your stand. Clicking here opens the small view.
+            street(halves(h).0, h, leading: true, alone: !split)
+                .overlay(alignment: .bottomTrailing) { if !split { info(h).padding(2) } }
+                .padding(.leading, 4)
         }
     }
 
@@ -377,15 +398,18 @@ struct IslandView: View {
             }
             .padding(.leading, 8)
         } else {
-            street(halves(h).1, h, leading: false)
-                .overlay { slide(h) }
-                .padding(.trailing, 6)
+            // The street goes on, with fast-forward and the numbers laid over it, small.
+            // Clicking here toggles fast-forward while selling.
+            street(halves(h).1, h, leading: false, alone: false)
+                .overlay { info(h) }
+                .padding(.trailing, 4)
         }
     }
 
     /// A piece of the street, rounded only on its outer side so the two halves read as one view.
-    @ViewBuilder private func street(_ rect: CGRect, _ h: CGFloat, leading: Bool) -> some View {
+    @ViewBuilder private func street(_ rect: CGRect, _ h: CGFloat, leading: Bool, alone: Bool) -> some View {
         let r: CGFloat = 5
+        let outer = alone || leading, inner = alone || !leading
         Group {
             if model.hasGame {
                 GameCrop(model: model, rect: rect)
@@ -400,11 +424,28 @@ struct IslandView: View {
             }
         }
         .frame(maxWidth: .infinity).frame(height: h - 4)
-        .clipShape(UnevenRoundedRectangle(topLeadingRadius: leading ? r : 0, bottomLeadingRadius: leading ? r : 0,
-                                          bottomTrailingRadius: leading ? 0 : r, topTrailingRadius: leading ? 0 : r))
+        .clipShape(UnevenRoundedRectangle(topLeadingRadius: outer ? r : 0, bottomLeadingRadius: outer ? r : 0,
+                                          bottomTrailingRadius: inner ? r : 0, topTrailingRadius: inner ? r : 0))
     }
 
     @State private var bob = false
+
+    /// Fast-forward (while selling) and the numbers taking turns, small and see-through.
+    private func info(_ h: CGFloat) -> some View {
+        HStack(spacing: 2) {
+            if model.running {
+                Image(systemName: "forward.fill")
+                    .font(.system(size: 8, weight: .heavy))
+                    .foregroundStyle(s.fast == 1 ? LT.buttonShadow : LT.yellow)
+                    .padding(.horizontal, 3).padding(.vertical, 2)
+                    .background(RoundedRectangle(cornerRadius: 3).fill(s.fast == 1 ? LT.yellow : .clear))
+            }
+            slide(h)
+        }
+        .padding(.horizontal, 3).padding(.vertical, 1)
+        .background(RoundedRectangle(cornerRadius: 4).fill(.black.opacity(0.5)))
+        .help(model.running ? (s.fast == 1 ? "Click for normal speed" : "Click to fast forward") : "")
+    }
 
     /// Cash, then a note, then cash again, crossfading slowly.
     private func slide(_ h: CGFloat) -> some View {
@@ -413,35 +454,32 @@ struct IslandView: View {
             let i = Int(ctx.date.timeIntervalSinceReferenceDate / 3) % max(1, items.count)
             let item = items[min(i, items.count - 1)]
             ZStack {
-                Text(item.text).font(LT.font(item.big ? h * 0.56 : h * 0.42)).foregroundStyle(item.color)
-                    .lineLimit(1).minimumScaleFactor(0.5)
+                Text(item.text).font(LT.font(h * 0.42)).foregroundStyle(item.color)
+                    .lineLimit(1).minimumScaleFactor(0.6)
                     .id(items.count > 1 ? i : 0)
                     .transition(.opacity)
             }
-            .padding(.horizontal, 4)
-            .background(RoundedRectangle(cornerRadius: 4).fill(.black.opacity(0.72)))
             .animation(.easeInOut(duration: 0.7), value: i)
         }
     }
 
-    private struct Slide { var text: String; var color: Color; var big: Bool }
+    private struct Slide { var text: String; var color: Color }
 
     private var slides: [Slide] {
-        guard model.hasGame else { return [Slide(text: "Lemonade", color: LT.yellow, big: true), Slide(text: "click to play", color: LT.dim, big: false)] }
+        guard model.hasGame else { return [Slide(text: "play", color: LT.yellow)] }
         if model.pulse, !s.report.isEmpty {
-            return [Slide(text: signedMoney(s.report.earnings), color: s.report.earnings < 0 ? warnColor : LT.yellow, big: true)]
+            return [Slide(text: signedMoney(s.report.earnings), color: s.report.earnings < 0 ? warnColor : LT.yellow)]
         }
-        let cash = Slide(text: money(s.cash), color: LT.yellow, big: true)
+        let cash = Slide(text: money(s.cash), color: LT.yellow)
         var notes: [Slide] = []
         if model.running {
-            notes.append(Slide(text: "\(s.today.sold) sold", color: .white, big: false))
-            notes.append(Slide(text: signedMoney(s.today.profit), color: s.today.profit < 0 ? warnColor : .white, big: false))
-            if s.today.missed > 0 { notes.append(Slide(text: "\(s.today.missed) left", color: warnColor, big: false)) }
-        } else if s.screen == "plan" {
+            notes.append(Slide(text: "\(s.today.sold) sold", color: .white))
+            notes.append(Slide(text: signedMoney(s.today.profit), color: s.today.profit < 0 ? warnColor : .white))
+            if s.today.missed > 0 { notes.append(Slide(text: "\(s.today.missed) left", color: warnColor)) }
+        } else if model.screen == "plan" {
             let short = s.cupsServable < Advisor.expectedCups(s)
-            notes.append(short ? Slide(text: "restock", color: warnColor, big: false)
-                               : Slide(text: "\(s.cupsServable) cups", color: .white, big: false))
-            notes.append(Slide(text: "\(s.highF)F", color: .white, big: false))
+            notes.append(short ? Slide(text: "restock", color: warnColor) : Slide(text: "\(s.cupsServable) cups", color: .white))
+            notes.append(Slide(text: "\(s.highF)F", color: .white))
         }
         return notes.isEmpty ? [cash] : notes.flatMap { [cash, $0] }
     }
@@ -449,7 +487,7 @@ struct IslandView: View {
     /// While open: sales during the day, yesterday while planning.
     private var extra: (String, String)? {
         if model.running { return ("\(s.today.sold) sold", "\(s.today.missed) walked away") }
-        if s.screen == "plan", s.day > 0, !s.report.isEmpty { return (signedMoney(s.report.earnings), "yesterday") }
+        if model.screen == "plan", s.day > 0, !s.report.isEmpty { return (signedMoney(s.report.earnings), "yesterday") }
         return nil
     }
 }
@@ -501,7 +539,7 @@ struct BodyView: View {
             Group {
                 if model.running {
                     street(width: NotchLayout.view.width, height: size.height)
-                } else if s.screen == "plan" {
+                } else if model.screen == "plan" {
                     // Planning: the quick plan beside the game's own stock bar, tabs and panel.
                     HStack(spacing: NotchLayout.pad) {
                         VStack(spacing: NotchLayout.pad) {
@@ -520,7 +558,7 @@ struct BodyView: View {
                             .clipShape(RoundedRectangle(cornerRadius: 8))
                             .overlay(RoundedRectangle(cornerRadius: 8).stroke(LT.panelDark, lineWidth: 2))
                     }
-                } else if s.screen == "dialog" {
+                } else if model.screen == "dialog" {
                     question
                 } else {
                     wholeScreen(height: size.height)
@@ -540,7 +578,7 @@ struct BodyView: View {
                         .help("Play out the rest of the day at once")
                     fastButton
                 }
-                if s.screen == "plan" {
+                if model.screen == "plan" {
                     Button(action: assistant.startDay) { Label("Start day", systemImage: "play.fill") }
                         .buttonStyle(NotchButtonStyle(prominent: true))
                         .disabled(assistant.busy != nil)
@@ -668,7 +706,7 @@ struct BodyView: View {
             .buttonStyle(.plain)
             .help("Open the full game")
             VStack(alignment: .leading, spacing: 8) {
-                Text(s.screen == "menu" ? "Main menu" : "Lemonade Remixed")
+                Text(model.screen == "menu" ? "Main menu" : "Lemonade Remixed")
                     .font(LT.font(24)).foregroundStyle(LT.yellow)
                 Text("Start a career or load a save in the full game. Once your stand is open, you can run it from here.")
                     .font(LT.font(17)).foregroundStyle(.white)
@@ -807,7 +845,11 @@ final class NotchController {
         }
         islandHost.fastRect = { [weak self] in
             guard let self, self.model.running, self.model.mode == .collapsed else { return nil }
-            return NotchLayout.fastGlyph   // at the left end of the left wing
+            let left = NotchLayout.leftWidth(right: self.model.right)
+            if self.model.right > 0 {   // the whole right side
+                return CGRect(x: left + self.layout.notch.width, y: 0, width: self.model.right, height: self.layout.stripHeight + NotchLayout.lip)
+            }
+            return CGRect(x: left / 2, y: 0, width: left / 2, height: self.layout.stripHeight)   // the info corner
         }
         island.orderFrontRegardless()
 

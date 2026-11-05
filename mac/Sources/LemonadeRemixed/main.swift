@@ -183,6 +183,7 @@ final class AppController: NSObject, NSApplicationDelegate {
         gameView.show(frames: runtime.framesFile)
         assistant.start()
         assistant.onState = { [weak self] s in self?.notch?.model.update(s, tip: self?.assistant.tips.first) }
+        assistant.onBusy = { [weak self] on in self?.notch?.model.hold = on }
         updateNotch()
         if let test = env["LEMONADE_SELFTEST"] {
             DispatchQueue.main.asyncAfter(deadline: .now() + 12) { self.link.send(test) }
