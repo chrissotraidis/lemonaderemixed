@@ -55,7 +55,9 @@ final class AppController: NSObject, NSApplicationDelegate {
                           styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
         window.title = "Lemonade Remixed"
         window.collectionBehavior = [.fullScreenPrimary]
-        window.contentView = NSHostingView(rootView: SetupView(model: setup))
+        let setupHost = NSHostingView(rootView: SetupView(model: setup))
+        setupHost.sizingOptions = []   // the window sets the size, not the content
+        window.contentView = setupHost
         window.center()
         if let size = env["LEMONADE_WINDOW"]?.split(separator: "x").compactMap({ Double($0) }), size.count == 2 {
             window.setContentSize(CGSize(width: size[0], height: size[1]))
@@ -171,6 +173,8 @@ final class AppController: NSObject, NSApplicationDelegate {
     func applyVolume() { runtime.setVolume(muted ? 0 : 100) }
 
     @objc func toggleMute() { muted.toggle() }
+    @objc func showWhereToGet() { InfoWindows.showWhereToGet() }
+    @objc func showAbout() { InfoWindows.showAbout() }
 
     var picture: PictureMode {
         PictureMode(rawValue: UserDefaults.standard.string(forKey: "picture") ?? "") ?? .sharp
@@ -196,6 +200,8 @@ final class AppController: NSObject, NSApplicationDelegate {
         let menu = NSMenu()
         let appItem = NSMenuItem()
         let appMenu = NSMenu()
+        appMenu.addItem(withTitle: "About Lemonade Remixed", action: #selector(showAbout), keyEquivalent: "")
+        appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "Quit Lemonade Remixed", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         appItem.submenu = appMenu
         menu.addItem(appItem)
@@ -212,6 +218,12 @@ final class AppController: NSObject, NSApplicationDelegate {
         gameMenu.addItem(withTitle: "Show Assistant", action: #selector(toggleAssistant), keyEquivalent: "\\")
         gameItem.submenu = gameMenu
         menu.addItem(gameItem)
+        let helpItem = NSMenuItem()
+        let helpMenu = NSMenu(title: "Help")
+        helpMenu.addItem(withTitle: "Where to Get the Game...", action: #selector(showWhereToGet), keyEquivalent: "")
+        helpItem.submenu = helpMenu
+        menu.addItem(helpItem)
+        NSApp.helpMenu = helpMenu
         NSApp.mainMenu = menu
     }
 }

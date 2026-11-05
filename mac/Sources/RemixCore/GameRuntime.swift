@@ -9,7 +9,7 @@ public final class GameRuntime {
         case wrongInstaller, wineFailed(String), missingResource(String)
         public var description: String {
             switch self {
-            case .wrongInstaller: return "That file isn't the supported Lemonade Tycoon Deluxe installer."
+            case .wrongInstaller: return "That file isn't the supported installer. Lemonade Remixed needs Setup.exe from the Zone.com edition of Lemonade Tycoon Deluxe."
             case .wineFailed(let step): return "Setting up the game failed while \(step). See the log in Application Support."
             case .missingResource(let name): return "The app is missing \(name)."
             }

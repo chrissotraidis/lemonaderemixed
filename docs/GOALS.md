@@ -49,9 +49,7 @@ Chris's first look (5 November) found the notch and picture not good enough: the
 - [x] Mute works on every screen: an FMOD proxy (`runtime/fmodproxy`) applies the app's volume to FMOD's effects master, which carries every sound the game plays (it never uses FMUSIC). Measured: master volume 0 while muted.
 - [x] Quitting the app closes the game and every Wine process; saves survive (supplies and day progress checked across two relaunches).
 
-*Done when:* starting from an empty Application Support folder, choosing `Setup.exe` leads to the main menu in under a minute with no Wine window or dialog on screen, and saves survive a relaunch. Measured on 5 November: 21 seconds, no Wine window, saves intact. Then Chris plays it.
-
-- [ ] **Chris**: build with `mac/bundle.sh`, open `mac/build/Lemonade Remixed.app`, choose `Setup.exe`, register, play a day, try ⌘M, quit and reopen.
+*Done when:* starting from an empty Application Support folder, choosing `Setup.exe` leads to the main menu in under a minute with no Wine window or dialog on screen, and saves survive a relaunch. Measured on 5 November: 21 seconds, no Wine window, saves intact. Chris played it on 5 November: it works.
 
 ## G3. A sharp picture ✅ (waiting for Chris's look)
 
@@ -67,39 +65,42 @@ Chris's first look (5 November) found the notch and picture not good enough: the
 
 *Done when:* the picture fills the window without blur at whole and fractional sizes (measured at 3× and 3.44×), and Chris approves the look. Higher-resolution art itself comes in G6.
 
-## G4. Game state
+## G4. Game state ✅
 
-*Objective:* the app knows what is happening in the game, so it can show real information instead of cropped pixels.
-
-- [ ] The helper finds the game's values in memory (cash, date, time of day, weather and forecast, stock, price, recipe, cups sold today, popularity, satisfaction, current screen) and publishes them to the presenter about ten times a second.
-- [ ] Volume: music and effects levels through the FMOD proxy DLL, replacing the speaker-button workaround.
-
-*Done when:* every value matches the game screen over a full week, including across days, moves and purchases.
+- [x] The helper reads cash, price, recipe, stock, day, the three-period forecast and live temperatures, location and rent, today's sales/profit/missed, and the last day's report (revenue, stock used and lost, rent, ads, earnings, walk-aways, melted ice) from fixed addresses in the game ([STATE.md](STATE.md)), plus the current screen from the frame. The bridge's `info` command returns it as JSON; the app polls it twice a second.
+- [x] Checked against the game's own screens over nine scripted days, including a move to the Park, purchases and recipe changes.
+- [ ] Still unmapped: popularity, satisfaction, upgrades and staff owned, advertising. Needed for the notch's popularity meter and the stand sprite's upgrade level.
+- [ ] Volume levels beyond mute (music/effects sliders) through the in-game agent.
 
 ## G5. The game in the notch
 
-*Objective:* a designed notch experience that uses the space well, makes sense at a glance and moves smoothly, built from the original art.
+*Objective:* the stand lives in the notch while you work. You glance at it for status, and hover or click to play the whole game.
 
-Collapsed (one strip, the full menu-bar height, using both sides of the notch):
+Collapsed (the full menu-bar height, both sides of the notch, no game UI crops):
 
-- [ ] Left: the original stand sprite with customers queuing in real time (or the lemon when the stand is closed), and the day's progress.
-- [ ] Right: today's cups sold and cash in a clean typeface, plus the weather icon from the game.
-- [ ] Nothing that needs explaining: every item is labelled by its icon or obvious from context, and no raw crops of the game's interface.
+- [ ] Left: the stand, drawn with the game's own stand sprite and the current weather icon; customers appear as a small queue while a day runs.
+- [ ] Right: cash in the game's yellow, and today's cups sold or the forecast high when planning.
+- [ ] A short pulse when the day ends, and a dot when the assistant has an important tip (out of stock, rent pressure).
 
-Expanded (hover, or click to pin):
+Peek (hover):
 
-- [ ] Grows smoothly out of the notch like the Dynamic Island: one panel whose shape animates with a spring and whose contents fade in, never a resized window.
-- [ ] A clean layout designed for the notch: the live town view with the stand as the hero image, today's numbers, and a few large controls (start day, skip, price, recipe preset, mute).
-- [ ] "Open full game" reveals the complete original interface at a whole-number scale for planning screens (supplies, upgrades, rent).
+- [ ] A Dynamic Island–style panel springs out of the notch in the game's style: the live town view with the stand, today's numbers, the top tip, and big game-style buttons for Start Day, Skip, a saved recipe and mute.
+
+Play (click):
+
+- [ ] The panel grows into the full game at a whole-number scale, playable with the mouse, with the assistant available; Esc or clicking away collapses it. The game keeps running in every state.
 
 Behaviour:
 
-- [ ] The game keeps running while collapsed, and the info stays live.
-- [ ] Works without a notch (a pill at the top centre), across Spaces, above fullscreen apps and on multiple displays.
+- [ ] Works without a notch (a pill at the top centre), across Spaces and over fullscreen apps; a setting chooses window, notch or both.
 
-*Done when:* a whole in-game week can be played from the notch and Chris signs off on the look and motion after a working session.
+*Done when:* a full in-game week can be played from the notch, then Chris uses it for a working session.
 
-## G6. HD art
+## G6. HD art (parked)
+
+Parked on 5 November: the original art looks good drawn sharp, and upscaling hundreds of sprites is the costliest, least certain item. A cheap test (top-bar icons, tabs, logo) stays possible later.
+
+### Original plan
 
 *Objective:* individual sprites, starting with the lemon, replaced by upscaled versions while everything else stays original.
 
@@ -110,37 +111,44 @@ Behaviour:
 
 *Done when:* the interface and then the town view render in HD with exact placement and no flicker, and Chris approves the look.
 
-## G7. Tips and quality of life
+## G7. Assistant and quality of life ✅ (waiting for Chris's play check)
 
-*Objective:* help without changing the game's rules.
+An assistant panel beside the game, drawn in the game's own style (its stripes, panels, buttons and a pixel font), scaled with the picture, and folded away with a game-style arrow or ⌘\\.
 
-- [ ] A morning advisor: one tip from the forecast, stock and yesterday's results, shown in the notch and the window.
-- [ ] Shortcuts that click through the original interface: buy several packs at once, apply a saved recipe, restock to targets.
-- [ ] An end-of-day summary: melted ice, spoiled lemons, leftover lemonade and why customers left.
+- [x] Morning tips from the forecast, stock and yesterday's report (ice for heat, price for sun or rain, restock warnings, walk-aways, melting ice, rent pressure). While a day runs it shows live cups, profit and walk-aways.
+- [x] Day report: the game's own numbers for the last day, until dismissed.
+- [x] Saved recipes: save today's recipe and price (named after the weather), apply on any day with one click.
+- [x] One-click restock: the cheapest packs that cover a target number of cups for the current recipe.
+- [x] Multi-pack buying: a basket of any packs bought in one go; the game's confirmation is turned off the first time.
+- [x] Every action clicks through the original interface and is checked in memory (buy, recipe and price verified exactly).
 
-*Done when:* each shortcut produces exactly the same game state as doing it by hand (checked with G4), and Chris has played with them.
+## G8. Bring your own game ✅
 
-## G8. Widget
+- [x] First run explains that Lemonade Remixed doesn't include or provide the game, links to the abandonware archives (Old Games Download, the supported Zone.com edition; My Abandonware), and asks for Setup.exe. A wrong file gets a clear message.
+- [x] Help ▸ Where to Get the Game and the About box repeat it, with Wine and font licences.
+
+## G9. Widget
 
 - [ ] A WidgetKit widget showing the stand, forecast, cash and yesterday's result.
 - [ ] Buttons (macOS 14 and later) for start day, a recipe preset and price up or down, routed to the running app.
 
 *Done when:* a whole morning routine can be done from the widget.
 
-## G9. Ship
+## G10. Ship
 
 - [ ] A signed app with Wine bundled (LGPL, with its source offered), a player README covering where to get their own installer, and a release checklist.
 - [ ] A clean-machine check, like PadMint's player check: a fresh user account with no developer tools, just the app and `Setup.exe`.
 - [ ] Publishing is Chris's decision.
 
-## G10. iPhone and iPad
+## G11. iPhone and iPad (plan only, in parallel with the notch)
 
-*Objective:* Lemonade Remixed as a resizable app on iOS and iPadOS.
+*Objective:* a plan, proven in the simulator, for Lemonade Remixed on iOS and iPadOS as a resizable app.
 
-- [ ] Find a way to run the original there. Wine can't run on iOS, so this needs either the rebuild route (the documented mechanics plus the decoded art from G6) or an x86 emulator inside the app; decide with evidence from a simulator prototype.
+- [ ] Decide how the original runs there. Wine can't run on iOS (no JIT for third-party apps), so the candidates are an x86 interpreter with a small Win32 layer for the handful of GDI/USER/FMOD calls this game makes, or a rebuild of the rules from MECHANICS.md and STATE.md drawing the player's decoded art. Prototype the cheaper one in the simulator first.
+- [ ] Reuse RemixCore (state, advisor, restock, saved recipes) and the themed SwiftUI assistant unchanged.
 - [ ] Touch controls, any window size on iPad (Stage Manager, Split View), and the iOS icon (master in `mac/Resources/icon`).
 
-*Done when:* a full in-game week can be played in the iOS simulator at several sizes, then on Chris's devices.
+*Done when:* the plan is written with a simulator prototype as evidence.
 
 ## Fallback
 

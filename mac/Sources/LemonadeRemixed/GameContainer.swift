@@ -13,6 +13,7 @@ final class GameContainer: NSView {
         self.game = game
         super.init(frame: .zero)
         panel = NSHostingView(rootView: AssistantView(model: model, layout: assistant, onToggle: { [weak self] in self?.onToggle() }))
+        panel.sizingOptions = []
         addSubview(game)
         addSubview(panel)
     }
