@@ -222,6 +222,7 @@ final class AppController: NSObject, NSApplicationDelegate {
         guard notch == nil, let screen = NSScreen.screens.first(where: { $0.auxiliaryTopLeftArea != nil }) ?? NSScreen.main else { return }
         let n = NotchController(screen: screen, sound: sound, link: link,
                                 startDay: { [weak self] in self?.assistant.startDay() },
+                                restock: { [weak self] in self?.assistant.restock() },
                                 fast: { [weak self] on in self?.assistant.setFast(on) },
                                 openWindow: { [weak self] in self?.notch?.set(.mini); self?.showWindow() })
         n.start(frames: runtime.framesFile)

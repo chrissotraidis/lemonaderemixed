@@ -49,7 +49,7 @@ struct NotchLayout {
         return CGRect(x: notch.minX - left, y: top, width: left + notch.width + right, height: stripHeight)
     }
 
-    static let miniWidth: CGFloat = 520, view = CGSize(width: 252, height: 108), viewScale: CGFloat = 2
+    static let miniWidth: CGFloat = 600, view = CGSize(width: 292, height: 108), viewScale: CGFloat = 2
     static let bar: CGFloat = 34, pad: CGFloat = 8
     var mini: CGRect {
         let h = Self.pad + Self.view.height * Self.viewScale + Self.pad + Self.bar + Self.pad + 2
@@ -88,6 +88,8 @@ final class NotchModel: ObservableObject {
     private var sinks = NSHashTable<FrameLayerView>.weakObjects()
 
     var inGame: Bool { ["plan", "day"].contains(state.screen) }
+    /// A career is open, even if the game is asking a question right now.
+    var hasGame: Bool { inGame || state.screen == "dialog" }
     var running: Bool { state.screen == "day" }
 
     func start(frames url: URL) {
@@ -224,6 +226,7 @@ struct NotchActions {
     var full: () -> Void = {}
     var collapse: () -> Void = {}
     var startDay: () -> Void = {}
+    var restock: () -> Void = {}
     var fast: (Bool) -> Void = { _ in }
     var openWindow: () -> Void = {}
 }
@@ -264,11 +267,11 @@ struct IslandView: View {
         return HStack(spacing: 6) {
             Spacer(minLength: 0)
             VStack(alignment: .trailing, spacing: -4) {
-                Text(model.inGame ? money(s.cash) : "Lemonade").font(LT.font(h * 0.56)).foregroundStyle(LT.yellow)
+                Text(model.hasGame ? money(s.cash) : "Lemonade").font(LT.font(h * 0.56)).foregroundStyle(LT.yellow)
                 Text(subline).font(LT.font(h * 0.38)).foregroundStyle(LT.dim)
             }
             Group {
-                if model.inGame {
+                if model.hasGame {
                     GameCrop(model: model, rect: model.around(width: 60, height: 40))
                 } else {
                     Image(nsImage: NSApp.applicationIconImage).resizable().interpolation(.high).aspectRatio(contentMode: .fit)
@@ -281,7 +284,7 @@ struct IslandView: View {
     }
 
     private var subline: String {
-        guard model.inGame else { return "Remixed" }
+        guard model.hasGame else { return "Remixed" }
         if s.running == 1 { return "\(s.today.sold) sold today" }
         return "day \(s.dayNumber)"
     }
@@ -300,7 +303,7 @@ struct IslandView: View {
                 if model.right >= 60 {
                     Text("\(s.tempsF[1])F").font(LT.font(h * 0.46)).foregroundStyle(.white).fixedSize()
                 }
-            } else if model.inGame {
+            } else if model.hasGame {
                 Text("\(s.highF)F").font(LT.font(h * 0.5)).foregroundStyle(.white).fixedSize()
             }
             Spacer(minLength: 0)
@@ -349,23 +352,21 @@ struct BodyView: View {
     private var miniView: some View {
         let size = CGSize(width: NotchLayout.view.width * NotchLayout.viewScale, height: NotchLayout.view.height * NotchLayout.viewScale)
         return VStack(spacing: NotchLayout.pad) {
-            Button(action: actions.full) {
-                ZStack {
-                    if model.inGame {
-                        GameCrop(model: model, rect: model.around(width: NotchLayout.view.width, height: NotchLayout.view.height))
-                    } else {
-                        GameCrop(model: model, rect: CGRect(x: 0, y: 0, width: 640, height: 274))   // the menu's top, at the street view's shape
-                    }
+            if model.inGame {
+                Button(action: actions.full) {
+                    GameCrop(model: model, rect: model.around(width: NotchLayout.view.width, height: NotchLayout.view.height))
+                        .frame(width: size.width, height: size.height)
+                        .overlay(alignment: .topLeading) { hud(leading: true).padding(6) }
+                        .overlay(alignment: .topTrailing) { hud(leading: false).padding(6) }
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(LT.panelDark, lineWidth: 2))
+                        .contentShape(Rectangle())
                 }
-                .frame(width: size.width, height: size.height)
-                .overlay(alignment: .topLeading) { hud(leading: true).padding(6) }
-                .overlay(alignment: .topTrailing) { hud(leading: false).padding(6) }
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(LT.panelDark, lineWidth: 2))
-                .contentShape(Rectangle())
+                .buttonStyle(.plain)
+                .help("Open the full game")
+            } else {
+                wholeScreen(height: size.height)
             }
-            .buttonStyle(.plain)
-            .help("Open the full game")
 
             HStack(spacing: 6) {
                 Button(action: actions.collapse) { Label("Hide", systemImage: "chevron.up") }
@@ -374,6 +375,11 @@ struct BodyView: View {
                 soundButton
                 Spacer()
                 if model.running { fastButton }
+                if s.screen == "plan", short > 0 {
+                    Button(action: actions.restock) { Label("Restock " + money(Supplies.cost(Advisor.restock(s, cups: Advisor.expectedCups(s)))), systemImage: "cart.fill") }
+                        .buttonStyle(NotchButtonStyle())
+                        .help("Buy enough for about \(Advisor.expectedCups(s)) cups, the day the forecast suggests")
+                }
                 if s.screen == "plan" {
                     Button(action: actions.startDay) { Label("Start day", systemImage: "play.fill") }
                         .buttonStyle(NotchButtonStyle(prominent: true))
@@ -387,23 +393,61 @@ struct BodyView: View {
         .padding(NotchLayout.pad)
     }
 
+    /// Away from the street (main menu, a question from the game): the whole
+    /// screen, uncropped, beside a note on what to do.
+    private func wholeScreen(height: CGFloat) -> some View {
+        let dialog = s.screen == "dialog"
+        return HStack(spacing: 12) {
+            Button(action: actions.full) {
+                GameCrop(model: model, rect: CGRect(x: 0, y: 0, width: 640, height: 480))
+                    .frame(width: height * 4 / 3, height: height)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(LT.panelDark, lineWidth: 2))
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Open the full game")
+            VStack(alignment: .leading, spacing: 8) {
+                Text(dialog ? "The game needs you" : (s.screen == "menu" ? "Main menu" : "Lemonade Remixed"))
+                    .font(LT.font(24)).foregroundStyle(LT.yellow)
+                Text(dialog ? "Answer it in the full game, then the street view comes back."
+                            : "Start a career or load a save in the full game. Once your stand is open, its street shows up here.")
+                    .font(LT.font(17)).foregroundStyle(.white)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
+            .padding(.top, 6)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(height: height)
+    }
+
     /// Numbers floating over the street, top corners.
     @ViewBuilder private func hud(leading: Bool) -> some View {
-        let lines: [(String, String)] = {
+        let warn = Color(red: 1, green: 0.55, blue: 0.4)
+        let lines: [(String, String, Color)] = {
             guard model.inGame else { return [] }
             if model.running {
-                return leading ? [(money(s.today.profit), "profit today"), ("\(s.today.sold)", "cups sold")]
-                               : [("\(s.tempsF[1])F", "right now"), ("\(s.today.missed)", "walked away")]
+                return leading ? [(money(s.today.profit), "profit today", LT.yellow), ("\(s.today.sold)", "cups sold", LT.yellow)]
+                               : [("\(s.tempsF[1])F", "right now", LT.yellow), ("\(s.today.missed)", "walked away", LT.yellow)]
             }
-            return leading ? [("Day \(s.dayNumber)", s.locationName), ("\(s.cupsServable)", "cups in stock")]
-                           : [("\(s.lowF)-\(s.highF)F", s.forecastWords), (money(s.price), "per cup")]
+            if leading {
+                var l = [("Day \(s.dayNumber)", s.locationName, LT.yellow)]
+                if s.day > 0, !s.report.isEmpty {
+                    let e = s.report.earnings
+                    l.append(((e > 0 ? "+" : "") + money(e), "yesterday, \(s.report.sold) sold", e < 0 ? warn : LT.yellow))
+                }
+                return l
+            }
+            return [("\(s.lowF)-\(s.highF)F", s.forecastWords, LT.yellow), (money(s.price), "per cup", LT.yellow),
+                    ("\(s.cupsServable)", short > 0 ? "cups ready (need \(Advisor.expectedCups(s)))" : "cups ready", short > 0 ? warn : LT.yellow)]
         }()
         if !lines.isEmpty {
             VStack(alignment: leading ? .leading : .trailing, spacing: 1) {
                 ForEach(Array(lines.enumerated()), id: \.offset) { _, l in
                     HStack(alignment: .firstTextBaseline, spacing: 4) {
                         if !leading { Text(l.1).font(LT.font(13)).foregroundStyle(LT.dim) }
-                        Text(l.0).font(LT.font(18)).foregroundStyle(LT.yellow)
+                        Text(l.0).font(LT.font(18)).foregroundStyle(l.2)
                         if leading { Text(l.1).font(LT.font(13)).foregroundStyle(LT.dim) }
                     }
                 }
@@ -413,13 +457,16 @@ struct BodyView: View {
         }
     }
 
+    /// Cups short of what the forecast suggests, while planning.
+    private var short: Int { s.screen == "plan" ? max(0, Advisor.expectedCups(s) - s.cupsServable) : 0 }
+
     // MARK: Full: the whole game
 
     private var fullView: some View {
         VStack(spacing: NotchLayout.fullPad) {
             HStack(spacing: 6) {
                 VStack(alignment: .leading, spacing: -3) {
-                    Text(model.inGame ? "Day \(s.dayNumber) - \(s.locationName) - \(s.lowF)F to \(s.highF)F" : "Lemonade Remixed")
+                    Text(model.hasGame ? "Day \(s.dayNumber) - \(s.locationName) - \(s.lowF)F to \(s.highF)F" : "Lemonade Remixed")
                         .font(LT.font(18)).foregroundStyle(.white).lineLimit(1)
                     Text(detailLine).font(LT.font(14)).foregroundStyle(LT.dim).lineLimit(1)
                 }
@@ -446,7 +493,7 @@ struct BodyView: View {
     }
 
     private var detailLine: String {
-        guard model.inGame else { return "Start or load a game." }
+        guard model.hasGame else { return "Start or load a game." }
         if s.running == 1 { return "Selling: \(s.today.sold) cups, \(money(s.today.profit)) profit, \(s.today.missed) walked away" }
         let stock = "Stock serves \(s.cupsServable) cups at \(money(s.price))"
         return model.tip.map { stock + ".  " + $0 } ?? stock
@@ -497,7 +544,7 @@ final class NotchController {
         return p
     }
 
-    init(screen: NSScreen, sound: Sound, link: GameLink, startDay: @escaping () -> Void,
+    init(screen: NSScreen, sound: Sound, link: GameLink, startDay: @escaping () -> Void, restock: @escaping () -> Void,
          fast: @escaping (Bool) -> Void, openWindow: @escaping () -> Void) {
         layout = NotchLayout(screen: screen)
         game = GameView(link: link)
@@ -510,7 +557,7 @@ final class NotchController {
         islandHost.sizingOptions = []
         island.contentView = islandHost
 
-        var actions = NotchActions(startDay: startDay, fast: fast, openWindow: openWindow)
+        var actions = NotchActions(startDay: startDay, restock: restock, fast: fast, openWindow: openWindow)
         weak var weakSelf: NotchController?
         actions.toggle = { weakSelf?.toggle() }
         actions.mini = { weakSelf?.set(.mini) }
