@@ -1,5 +1,6 @@
 import Foundation
 import Network
+import RemixCore
 
 /// Sends input to the original game through the bridge running inside Wine.
 /// The bridge only starts listening once the helper is up, and restarts with
@@ -27,7 +28,7 @@ final class GameLink {
             default: return c
             }
         }
-        let c = NWConnection(host: "127.0.0.1", port: 47123, using: .tcp)
+        let c = NWConnection(host: "127.0.0.1", port: NWEndpoint.Port(rawValue: Bridge.port)!, using: .tcp)
         c.stateUpdateHandler = { [weak self, weak c] state in
             switch state {
             case .failed, .waiting: c?.cancel(); self?.queue.async { if self?.connection === c { self?.connection = nil } }

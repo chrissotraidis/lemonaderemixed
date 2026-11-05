@@ -167,6 +167,7 @@ public final class GameRuntime {
         try? FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
         env["HOME"] = home.path
         env["WINEDEBUG"] = "-all"
+        env["REMIX_PORT"] = String(Bridge.port)
         env["WINEDLLOVERRIDES"] = "mscoree=;mshtml=;winemenubuilder.exe=d" + (display ? "" : ";winemac.drv=d")
         p.environment = env
         p.standardInput = FileHandle.nullDevice

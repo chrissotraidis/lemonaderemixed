@@ -2,7 +2,8 @@ import Foundation
 
 /// Request/reply access to the bridge inside Wine (runtime/helper/bridge.py).
 public enum Bridge {
-    public static let port: UInt16 = 47123
+    /// The bridge's port: 47123, or LEMONADE_PORT for a second copy (testing).
+    public static let port: UInt16 = ProcessInfo.processInfo.environment["LEMONADE_PORT"].flatMap { UInt16($0) } ?? 47123
 
     /// Sends one command and returns the reply line, or nil if the helper
     /// isn't reachable. Blocks; call it off the main thread.

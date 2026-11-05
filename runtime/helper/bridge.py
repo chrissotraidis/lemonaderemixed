@@ -10,12 +10,13 @@ the original game. One command per line, one reply line each:
                                 ok | invalid | no-dialog | timeout
   quit                          ask the game to close
 """
+import os
 import socket
 import threading
 
 GAME_TITLE = "Lemonade Tycoon Deluxe"
 KEY_DIALOGS = ("Reminder", "Enter Key", "Error!")
-PORT = 47123
+PORT = int(os.environ.get("REMIX_PORT", "47123"))
 BM_CLICK = 0x00F5
 
 
