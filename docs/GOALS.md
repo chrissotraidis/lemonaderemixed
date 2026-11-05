@@ -37,24 +37,28 @@ Proves the plumbing only: live frames from the Wine window via ScreenCaptureKit,
 
 Chris's first look (5 November) found the notch and picture not good enough: the strip wastes the space and shows unexplained crops, the expansion crams the whole desktop interface under the notch, the picture is soft, and the transition jerks. Those findings are now requirements in G3 to G5.
 
-## G2. It just works
+## G2. It just works ✅ (waiting for Chris's play check)
 
 *Objective:* one app that takes a player from a fresh Mac to playing without ever seeing Wine.
 
-- [ ] The app bundles Wine and creates its own prefix on first launch.
-- [ ] First launch asks for `Setup.exe` (checking its SHA-256), unpacks it in Swift (a port of the Python unpacker) and installs the game into the prefix.
-- [ ] The player enters their registration name and key in the app; the helper fills in Armadillo's dialog.
-- [ ] Launch starts the helper, which starts the game; the presenter connects on its own and survives game restarts.
-- [ ] The Wine window is never visible (kept off-screen or behind the presenter until G3 replaces capture with a frame tap).
-- [ ] Mute works on every screen, and quitting the app closes the game and saves.
+- [x] The app bundles Wine and creates its own prefix on first launch (`wineboot` runs with the Mac display driver off, so Wine's "updating" dialog can't appear).
+- [x] First launch asks for `Setup.exe`, checks its SHA-256 and unpacks it in Swift (`RemixCore.InstallerArchive`; byte-identical to the Python unpacker) into the prefix.
+- [x] The player enters their registration name and key in the app; the helper fills in Armadillo's dialog. A wrong key shows an error and can be retried.
+- [x] Launch starts the helper, which starts the game; the presenter connects on its own. The app quits when the game closes, and a relaunch reconnects.
+- [x] The Wine window is never visible: the helper moves every game window off-screen within 15 ms and the presenter captures it there. A 30 ms on-screen watcher saw no Wine window from install to play. (Wine's Dock icon remains; see G3.)
+- [x] Mute works on every screen: an FMOD proxy (`runtime/fmodproxy`) applies the app's volume to FMOD's effects master, which carries every sound the game plays (it never uses FMUSIC). Measured: master volume 0 while muted.
+- [x] Quitting the app closes the game and every Wine process; saves survive (supplies and day progress checked across two relaunches).
 
-*Done when:* starting from an empty Application Support folder, choosing `Setup.exe` leads to the main menu in under a minute with no Wine window or dialog on screen, and saves survive a relaunch. Then Chris plays it.
+*Done when:* starting from an empty Application Support folder, choosing `Setup.exe` leads to the main menu in under a minute with no Wine window or dialog on screen, and saves survive a relaunch. Measured on 5 November: 21 seconds, no Wine window, saves intact. Then Chris plays it.
+
+- [ ] **Chris**: build with `mac/bundle.sh`, open `mac/build/Lemonade Remixed.app`, choose `Setup.exe`, register, play a day, try ⌘M, quit and reopen.
 
 ## G3. A sharp picture
 
 *Objective:* the original art looks crisp at every size, with no softness anywhere.
 
 - [ ] Get exact game pixels. Today the frame is resampled twice: Wine draws the 640 × 480 window into a Retina window at double size, then ScreenCaptureKit scales it back down. Fix it with a frame tap: a small DLL loaded into the game (as a proxy for `msimg32.dll` or `fmod.dll`, both loaded from the game folder) copies each finished frame into shared memory. That also removes the screen-recording permission and lets the Wine window stay hidden. Interim: Wine's Retina mode with capture at native backing size.
+- [ ] Remove Wine's Dock icon. With frames coming from the tap, Wine can run without its Mac display driver, so it never registers as an app. (Injecting a library into Wine to change its activation policy doesn't work: Wine's preloader skips the library's start-up code.)
 - [ ] Scale only by whole numbers with nearest-neighbour sampling (2×, 3×, 4×), centring with a border instead of stretching to odd sizes.
 - [ ] Add an optional smooth mode: a pixel-art upscaler (MMPX, xBR or ScaleFX, whichever has a licence that allows shipping) in a Metal renderer, so curves like the lemon's stay smooth at 4K.
 

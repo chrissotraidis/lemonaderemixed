@@ -5,6 +5,8 @@ let package = Package(
     name: "LemonadeRemixed",
     platforms: [.macOS(.v14)],
     targets: [
-        .executableTarget(name: "LemonadeRemixed", path: "Sources/LemonadeRemixed")
+        .target(name: "RemixCore", path: "Sources/RemixCore"),
+        .executableTarget(name: "LemonadeRemixed", dependencies: ["RemixCore"], path: "Sources/LemonadeRemixed"),
+        .executableTarget(name: "remix-unpack", dependencies: ["RemixCore"], path: "Sources/remix-unpack"),
     ]
 )

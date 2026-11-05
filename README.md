@@ -17,4 +17,4 @@ This repository holds only our own code and documentation. Players bring their o
 
 ## Status
 
-Early prototype. The original runs under Wine and its economy is documented. [mac/](mac) holds a first shell that mirrors the live game into a resizable window and beside the notch and sends input back through the helper in [runtime/helper](runtime/helper); it proves the plumbing, not the design. Next is G2: one app that installs and runs everything with no Wine visible.
+G2 is built and waiting for a play check: [mac/](mac) builds Lemonade Remixed.app, which installs the original from your own `Setup.exe` into a private Wine setup, registers it, and plays it in a native window with mute, while Wine stays out of sight. The helper inside Wine lives in [runtime/helper](runtime/helper) and the audio proxy in [runtime/fmodproxy](runtime/fmodproxy). Build with `mac/bundle.sh` (needs Wine Stable from Homebrew and LLVM).
