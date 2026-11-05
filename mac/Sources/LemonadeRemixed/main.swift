@@ -10,6 +10,8 @@ import SwiftUI
 ///   LEMONADE_MUTED=1   start muted
 ///   LEMONADE_PICTURE=sharp|pixel    picture mode
 ///   LEMONADE_WINDOW=WIDTHxHEIGHT    initial window content size in points
+///   LEMONADE_SELFTEST="tap X Y"     send this through the app's input link
+///                                   12 s after the game appears (testing)
 final class AppController: NSObject, NSApplicationDelegate {
     let env = ProcessInfo.processInfo.environment
     lazy var runtime = GameRuntime(
@@ -25,6 +27,7 @@ final class AppController: NSObject, NSApplicationDelegate {
     var triedAutoKey = false
     var sawGame = false
     let work = DispatchQueue(label: "runtime")
+    var termSource: DispatchSourceSignal?
 
     var muted: Bool {
         get { UserDefaults.standard.bool(forKey: "muted") }
@@ -32,6 +35,12 @@ final class AppController: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ note: Notification) {
+        // A plain kill (logout, Activity Monitor) still closes the game and Wine.
+        signal(SIGTERM, SIG_IGN)
+        let term = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
+        term.setEventHandler { quitSoon() }
+        term.resume()
+        termSource = term
         if env["LEMONADE_MUTED"] == "1" { UserDefaults.standard.set(true, forKey: "muted") }
         if let p = env["LEMONADE_PICTURE"] { UserDefaults.standard.set(p, forKey: "picture") }
         gameView = GameView(link: link)
@@ -123,8 +132,9 @@ final class AppController: NSObject, NSApplicationDelegate {
                 case "game":
                     self.sawGame = true
                     self.showGame()
-                case "stopped" where self.sawGame:
-                    NSApp.terminate(nil)
+                case "stopped" where self.sawGame,
+                     nil where self.sawGame && !self.runtime.isRunning:
+                    quitSoon()
                     return
                 default:
                     break
@@ -146,6 +156,9 @@ final class AppController: NSObject, NSApplicationDelegate {
         showingGame = true
         window.contentView = gameView
         gameView.show(frames: runtime.framesFile)
+        if let test = env["LEMONADE_SELFTEST"] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 12) { self.link.send(test) }
+        }
     }
 
     func applyVolume() { runtime.setVolume(muted ? 0 : 100) }
@@ -165,7 +178,7 @@ final class AppController: NSObject, NSApplicationDelegate {
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         work.async { [self] in
             runtime.stop()
-            DispatchQueue.main.async { NSApp.reply(toApplicationShouldTerminate: true) }
+            RunLoop.main.perform(inModes: [.common, .modalPanel]) { NSApp.reply(toApplicationShouldTerminate: true) }
         }
         return .terminateLater
     }
@@ -201,6 +214,12 @@ extension AppController: NSMenuItemValidation {
         if item.action == #selector(choosePicture(_:)) { item.state = (item.representedObject as? String) == picture.rawValue ? .on : .off }
         return true
     }
+}
+
+/// Quits from inside a dispatched block: the terminate request runs from the
+/// run loop, where the reply it waits for can still be delivered.
+func quitSoon() {
+    RunLoop.main.perform(inModes: [.common]) { NSApp.terminate(nil) }
 }
 
 let app = NSApplication.shared

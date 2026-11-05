@@ -136,6 +136,10 @@ public final class GameRuntime {
     }
 
     /// Player volume, 0 to 100, applied live by the audio proxy.
+    /// Whether the helper (and so the game) is still running.
+    public var isRunning: Bool { helper?.isRunning == true }
+
+    /// Player volume, 0 to 100, applied live by the audio proxy.
     public func setVolume(_ volume: Int) {
         let v = max(0, min(100, volume))
         try? Data(String(v).utf8).write(to: gameDir.appendingPathComponent("remix-volume.txt"))
