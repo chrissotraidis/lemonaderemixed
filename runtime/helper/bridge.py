@@ -6,7 +6,7 @@ the original game. One command per line, one reply line each:
   info                          game state as one line of JSON (gamestate.py)
   buy N*12                      buy packs: lemons S M L, sugar S M L, ice S M L,
                                 cups S M L (actions.py)
-  recipe L S I | price CENTS | startday | fast on|off
+  recipe L S I | price CENTS | startday | fast on|off | skip
   move X Y | down X Y | up X Y | tap X Y
                                 mouse input at game coordinates (640x480)
   char TEXT                     type characters
@@ -109,6 +109,8 @@ def handle(line):
         return set_fast(arg.strip() == "on")
     if cmd == "startday":
         return start_day()
+    if cmd == "skip":
+        return skip_day()
     if cmd == "register":
         name, _, key = arg.partition("\t")
         return register(name, key)

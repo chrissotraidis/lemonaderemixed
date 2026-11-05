@@ -108,3 +108,11 @@ def start_day():
         return err
     _click(266, 468, 0.3)
     return "ok" if _wait_screen("day", 3) else "no: " + screen()
+
+
+def skip_day():
+    """The game's own Skip button: the rest of the day plays out at once."""
+    if screen() != "day":
+        return "busy: no day running"
+    _click(603, 352, 0.3)
+    return "ok"

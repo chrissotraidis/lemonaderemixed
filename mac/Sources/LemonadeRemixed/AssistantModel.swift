@@ -16,6 +16,10 @@ final class AssistantModel: ObservableObject {
     @Published var recipes: [SavedRecipe] = [] { didSet { saveRecipes() } }
     @Published var basket = [Int](repeating: 0, count: 12)
     @Published var restockCups = 0
+    /// Recipe and price clicked in the notch, sent to the game once the clicking stops.
+    @Published private(set) var draftRecipe: [Int]?
+    @Published private(set) var draftPrice: Int?
+    private var sendDraft: DispatchWorkItem?
     /// Called with every new state (the notch uses it).
     var onState: ((GameState) -> Void)?
 
@@ -53,6 +57,7 @@ final class AssistantModel: ObservableObject {
         let old = state
         if s != old { state = s }
         if restockCups == 0 || s.day != old.day { restockCups = Advisor.expectedCups(s) }
+        if s.day != old.day { lastResult = nil }
         onState?(s)
     }
 
@@ -63,8 +68,8 @@ final class AssistantModel: ObservableObject {
         return s.report
     }
 
-    /// The Advisor is offered on the planning and day screens.
-    var showsAdvisor: Bool { state.screen == "plan" || state.screen == "day" }
+    /// The Advisor is offered while planning; during the day the game's own panel is left clear.
+    var showsAdvisor: Bool { state.screen == "plan" }
 
     /// Something worth a nudge: not enough stock for the day, or rent pressure.
     var urgent: Bool {
@@ -86,9 +91,24 @@ final class AssistantModel: ObservableObject {
             for c in commands { replies.append(Bridge.request(c, timeout: 60) ?? "no reply") }
             DispatchQueue.main.async {
                 self?.busy = nil
-                self?.lastResult = replies.allSatisfy({ $0.hasPrefix("ok") || $0.hasPrefix("bought") }) ? "\(label): done" : "\(label): \(replies.joined(separator: "; "))"
+                self?.lastResult = Self.describe(label, replies)
             }
         }
+    }
+
+    /// A plain sentence for what an action did, e.g. "Bought 200 ice for $3.00".
+    static func describe(_ label: String, _ replies: [String]) -> String {
+        for r in replies where r.hasPrefix("bought ") {
+            let parts = r.split(separator: " ")
+            let got = parts.count > 1 ? parts[1].split(separator: ",").compactMap { Int($0) } : []
+            let spent = parts.count > 3 ? Int(parts[3]) ?? 0 : 0
+            let names = ["lemons", "sugar", "ice", "cups"]
+            let items = zip(got, names).filter { $0.0 > 0 }.map { "\($0.0) \($0.1)" }
+            if items.isEmpty { return "Nothing was bought (not enough cash?)" }
+            return "Bought " + items.joined(separator: ", ") + " for " + money(spent)
+        }
+        if replies.allSatisfy({ $0.hasPrefix("ok") }) { return "\(label): done" }
+        return "\(label): " + replies.joined(separator: "; ")
     }
 
     func buy(_ counts: [Int]) {
@@ -99,6 +119,41 @@ final class AssistantModel: ObservableObject {
     func buyBasket() { buy(basket); basket = [Int](repeating: 0, count: 12) }
     func restock() { buy(restockPlan) }
     func startDay() { perform("Starting the day", ["startday"]) }
+    func skipDay() { work.async { _ = Bridge.request("skip", timeout: 5) } }
+
+    var shownRecipe: [Int] { draftRecipe ?? state.recipe }
+    var shownPrice: Int { draftPrice ?? state.price }
+
+    /// One click on a recipe or price arrow: shown at once, sent when the clicking stops.
+    func nudgeRecipe(_ i: Int, by d: Int) {
+        var r = shownRecipe
+        r[i] = min(20, max(i == 2 ? 0 : 1, r[i] + d))
+        draftRecipe = r
+        scheduleDraft()
+    }
+
+    func nudgePrice(by cents: Int) {
+        draftPrice = min(1000, max(10, shownPrice + cents))
+        scheduleDraft()
+    }
+
+    private func scheduleDraft() {
+        sendDraft?.cancel()
+        let item = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            var commands: [String] = []
+            if let r = self.draftRecipe, r != self.state.recipe { commands.append("recipe \(r[0]) \(r[1]) \(r[2])") }
+            if let p = self.draftPrice, p != self.state.price { commands.append("price \(p)") }
+            guard !commands.isEmpty else { self.draftRecipe = nil; self.draftPrice = nil; return }
+            self.busy = "Updating"
+            self.work.async {
+                for c in commands { _ = Bridge.request(c, timeout: 30) }
+                DispatchQueue.main.async { self.busy = nil; self.draftRecipe = nil; self.draftPrice = nil; self.poll() }
+            }
+        }
+        sendDraft = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7, execute: item)
+    }
 
     /// Fast-forward on or off, without the busy indicator (it's instant).
     func setFast(_ on: Bool) {

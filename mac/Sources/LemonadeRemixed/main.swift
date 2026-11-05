@@ -207,6 +207,7 @@ final class AppController: NSObject, NSApplicationDelegate {
     }
 
     @objc func showWindow() {
+        notch?.set(.collapsed)
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
@@ -220,11 +221,14 @@ final class AppController: NSObject, NSApplicationDelegate {
     func updateNotch() {
         guard showingGame, notchEnabled else { notch?.close(); notch = nil; return }
         guard notch == nil, let screen = NSScreen.screens.first(where: { $0.auxiliaryTopLeftArea != nil }) ?? NSScreen.main else { return }
-        let n = NotchController(screen: screen, sound: sound, link: link,
-                                startDay: { [weak self] in self?.assistant.startDay() },
-                                restock: { [weak self] in self?.assistant.restock() },
-                                fast: { [weak self] on in self?.assistant.setFast(on) },
-                                openWindow: { [weak self] in self?.notch?.set(.mini); self?.showWindow() })
+        let n = NotchController(screen: screen, sound: sound, link: link, assistant: assistant,
+                                openWindow: { [weak self] in self?.showWindow() })
+        // One place at a time: opening the notch puts the window away, and
+        // bringing the window up tucks the notch back into its island.
+        n.onOpen = { [weak self] in
+            guard let w = self?.window, w.isVisible, !w.isMiniaturized else { return }
+            w.orderOut(nil)
+        }
         n.start(frames: runtime.framesFile)
         n.model.update(assistant.state, tip: assistant.tips.first)
         notch = n
@@ -235,6 +239,7 @@ final class AppController: NSObject, NSApplicationDelegate {
         if let log = env["LEMONADE_NOTCH_SELFTEST"] {
             DispatchQueue.main.asyncAfter(deadline: .now() + 14) { n.selfTest(log: log) }
         }
+        if let path = env["LEMONADE_NOTCH_CMDS"] { n.watchCommands(path) }   // testing
     }
 
     private func buildMenu() {

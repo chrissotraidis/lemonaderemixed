@@ -51,8 +51,13 @@ struct NotchLayout {
 
     static let miniWidth: CGFloat = 600, view = CGSize(width: 292, height: 108), viewScale: CGFloat = 2
     static let bar: CGFloat = 34, pad: CGFloat = 8
-    var mini: CGRect {
-        let h = Self.pad + Self.view.height * Self.viewScale + Self.pad + Self.bar + Self.pad + 2
+    /// The game's left half at 1x: stock bar, tabs and the tab's panel.
+    static let menus = CGRect(x: 0, y: 0, width: 330, height: 424)
+    /// The middle of the screen at 1x, where the game asks its questions.
+    static let dialog = CGRect(x: 110, y: 80, width: 420, height: 320)
+    var mini: CGRect { mini(view: Self.view.height * Self.viewScale) }
+    func mini(view: CGFloat) -> CGRect {
+        let h = Self.pad + view + Self.pad + Self.bar + Self.pad + 2
         return CGRect(x: notch.midX - Self.miniWidth / 2, y: top - h, width: Self.miniWidth, height: h)
     }
 
@@ -62,10 +67,10 @@ struct NotchLayout {
         return CGRect(x: notch.midX - w / 2, y: top - h, width: w, height: h)
     }
 
-    func body(_ mode: NotchMode) -> CGRect {
+    func body(_ mode: NotchMode, view: CGFloat = NotchLayout.view.height * NotchLayout.viewScale) -> CGRect {
         switch mode {
         case .collapsed: return CGRect(x: notch.midX - 160, y: top - 1, width: 320, height: 1)
-        case .mini: return mini
+        case .mini: return mini(view: view)
         case .full: return full
         }
     }
@@ -82,6 +87,16 @@ final class NotchModel: ObservableObject {
     @Published var pulse = false
     @Published var tip: String?
     @Published var right: CGFloat = 0
+    /// While planning, the small view can show the game's own menus instead of the quick plan.
+    @Published var menus = false { didSet { if menus != oldValue { relayout?() } } }
+    var relayout: (() -> Void)?
+
+    /// Height of the small view's picture: the game's menus and its questions need more room.
+    var viewHeight: CGFloat {
+        if state.screen == "dialog" { return NotchLayout.dialog.height }
+        if menus && state.screen == "plan" { return NotchLayout.menus.height }
+        return NotchLayout.view.height * NotchLayout.viewScale
+    }
     private var tap: FrameTap?
     private var timer: Timer?
     private var lastScan = Date.distantPast
@@ -117,7 +132,10 @@ final class NotchModel: ObservableObject {
             DispatchQueue.main.asyncAfter(deadline: .now() + 3) { self.pulse = false }
         }
         if tip != self.tip { self.tip = tip }
+        let oldHeight = viewHeight
         if s != state { state = s }
+        if menus && s.screen == "day" { menus = false }
+        if viewHeight != oldHeight { relayout?() }
     }
 
     private func tick() {
@@ -132,7 +150,7 @@ final class NotchModel: ObservableObject {
 
     /// A crop of the town view centred on the cart, kept inside the town view.
     func around(width: CGFloat, height: CGFloat) -> CGRect {
-        let town = CGRect(x: 331, y: 123, width: 305, height: 241)
+        let town = CGRect(x: 331, y: 123, width: 300, height: 241)
         let c = cart ?? CGPoint(x: town.midX, y: town.midY)
         let w = min(width, town.width), h = min(height, town.height)
         let x = (min(max(c.x - w / 2, town.minX), town.maxX - w)).rounded()
@@ -162,6 +180,8 @@ final class NotchModel: ObservableObject {
 /// pixels each time a frame arrives.
 final class FrameLayerView: NSView {
     var crop = CGRect(x: 0, y: 0, width: 640, height: 480)
+    /// Set to make this piece of the game clickable: clicks go to the game at the matching spot.
+    var link: GameLink?
     override init(frame: NSRect) {
         super.init(frame: frame)
         wantsLayer = true
@@ -169,7 +189,25 @@ final class FrameLayerView: NSView {
         layer?.contentsGravity = .resize
     }
     required init?(coder: NSCoder) { fatalError() }
-    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    override func hitTest(_ point: NSPoint) -> NSView? { link == nil ? nil : super.hitTest(point) }
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        trackingAreas.forEach(removeTrackingArea)
+        if link != nil {
+            addTrackingArea(NSTrackingArea(rect: bounds, options: [.mouseMoved, .activeAlways, .inVisibleRect], owner: self))
+        }
+    }
+    private func gamePoint(_ e: NSEvent) -> CGPoint? {
+        guard bounds.width > 0, bounds.height > 0 else { return nil }
+        let p = convert(e.locationInWindow, from: nil)
+        let top = isFlipped ? p.y : bounds.height - p.y
+        return CGPoint(x: crop.minX + p.x * crop.width / bounds.width, y: crop.minY + top * crop.height / bounds.height)
+    }
+    override func mouseDown(with e: NSEvent) { if let l = link, let p = gamePoint(e) { l.mouse("move", p); l.mouse("down", p) } }
+    override func mouseUp(with e: NSEvent) { if let l = link, let p = gamePoint(e) { l.mouse("up", p) } }
+    override func mouseDragged(with e: NSEvent) { if let l = link, let p = gamePoint(e) { l.mouse("move", p) } }
+    override func mouseMoved(with e: NSEvent) { if let l = link, let p = gamePoint(e) { l.mouse("move", p) } }
     func show(_ image: CGImage) {
         guard let piece = image.cropping(to: crop.integral) else { return }
         CATransaction.begin()
@@ -182,9 +220,11 @@ final class FrameLayerView: NSView {
 struct GameCrop: NSViewRepresentable {
     let model: NotchModel
     let rect: CGRect
+    var link: GameLink? = nil
     func makeNSView(context: Context) -> FrameLayerView {
         let v = FrameLayerView(frame: .zero)
         v.crop = rect
+        v.link = link
         model.attach(v)
         return v
     }
@@ -225,11 +265,26 @@ struct NotchActions {
     var mini: () -> Void = {}
     var full: () -> Void = {}
     var collapse: () -> Void = {}
-    var startDay: () -> Void = {}
-    var restock: () -> Void = {}
-    var fast: (Bool) -> Void = { _ in }
     var openWindow: () -> Void = {}
 }
+
+/// A small square "-" or "+" in the game's button green.
+struct ChipStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(LT.font(18)).foregroundStyle(.white)
+            .frame(width: 20, height: 20)
+            .background(LT.bigButton)
+            .overlay(alignment: .top) { (configuration.isPressed ? LT.buttonShadow : LT.buttonHi).frame(height: 1) }
+            .overlay(alignment: .bottom) { (configuration.isPressed ? LT.buttonHi : LT.buttonShadow).frame(height: 1) }
+            .clipShape(RoundedRectangle(cornerRadius: 3))
+            .brightness(configuration.isPressed ? -0.08 : 0)
+    }
+}
+
+let warnColor = Color(red: 1, green: 0.55, blue: 0.4)
+
+func signedMoney(_ cents: Int) -> String { (cents > 0 ? "+" : "") + money(cents) }
 
 // MARK: - The island
 
@@ -237,10 +292,11 @@ struct IslandView: View {
     @ObservedObject var model: NotchModel
     let layout: NotchLayout
     private var s: GameState { model.state }
+    /// The street view or the full game is open below the notch.
+    private var open: Bool { model.mode != .collapsed }
 
     var body: some View {
         let h = layout.stripHeight
-        let joined = model.mode != .collapsed
         HStack(spacing: 0) {
             if layout.hasNotch {
                 left.frame(width: NotchLayout.leftWing)
@@ -251,42 +307,56 @@ struct IslandView: View {
             }
         }
         .frame(height: h)
-        .background(
-            UnevenRoundedRectangle(bottomLeadingRadius: joined ? 0 : 10, bottomTrailingRadius: joined ? 0 : 10)
-                .fill(.black)
-                .overlay(UnevenRoundedRectangle(bottomLeadingRadius: 10, bottomTrailingRadius: 10)
-                    .stroke(model.pulse ? LT.yellow : .clear, lineWidth: 2))
-        )
+        .background(UnevenRoundedRectangle(bottomLeadingRadius: open ? 0 : 10, bottomTrailingRadius: open ? 0 : 10).fill(.black))
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .animation(.easeInOut(duration: 0.3), value: model.pulse)
     }
 
-    /// Left of the notch, hugging it: cash and status, then your stand.
+    /// Left of the notch, hugging it. Closed: cash, a status line and your stand.
+    /// Open: the stand is on screen below, so the wing carries more numbers instead.
     private var left: some View {
         let h = layout.stripHeight
-        return HStack(spacing: 6) {
+        return HStack(spacing: 10) {
             Spacer(minLength: 0)
-            VStack(alignment: .trailing, spacing: -4) {
-                Text(model.hasGame ? money(s.cash) : "Lemonade").font(LT.font(h * 0.56)).foregroundStyle(LT.yellow)
-                Text(subline).font(LT.font(h * 0.38)).foregroundStyle(LT.dim)
-            }
-            Group {
-                if model.hasGame {
-                    GameCrop(model: model, rect: model.around(width: 60, height: 40))
-                } else {
-                    Image(nsImage: NSApp.applicationIconImage).resizable().interpolation(.high).aspectRatio(contentMode: .fit)
+            if open, model.hasGame, let extra {
+                VStack(alignment: .trailing, spacing: -4) {
+                    Text(extra.0).font(LT.font(h * 0.5)).foregroundStyle(.white)
+                    Text(extra.1).font(LT.font(h * 0.38)).foregroundStyle(LT.dim)
                 }
             }
-            .frame(width: (h - 4) * 1.5, height: h - 4)
-            .clipShape(RoundedRectangle(cornerRadius: 4))
+            VStack(alignment: .trailing, spacing: -4) {
+                Text(model.hasGame ? money(s.cash) : "Lemonade").font(LT.font(h * 0.56)).foregroundStyle(LT.yellow)
+                    .padding(.horizontal, 3)
+                    .background(RoundedRectangle(cornerRadius: 4).fill(LT.yellow.opacity(model.pulse ? 0.3 : 0)))
+                Text(subline).font(LT.font(h * 0.38)).foregroundStyle(model.pulse ? LT.yellow : LT.dim)
+            }
+            if !open {
+                Group {
+                    if model.hasGame {
+                        GameCrop(model: model, rect: model.around(width: 60, height: 40))
+                    } else {
+                        Image(nsImage: NSApp.applicationIconImage).resizable().interpolation(.high).aspectRatio(contentMode: .fit)
+                    }
+                }
+                .frame(width: (h - 4) * 1.5, height: h - 4)
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+            }
         }
         .padding(.trailing, 8)
     }
 
     private var subline: String {
         guard model.hasGame else { return "Remixed" }
-        if s.running == 1 { return "\(s.today.sold) sold today" }
+        if model.pulse, !s.report.isEmpty { return signedMoney(s.report.earnings) + " yesterday" }
+        if s.running == 1 { return open ? signedMoney(s.today.profit) + " today" : "\(s.today.sold) sold today" }
         return "day \(s.dayNumber)"
+    }
+
+    /// The second column while open: sales during the day, the forecast while planning.
+    private var extra: (String, String)? {
+        if model.running { return ("\(s.today.sold) sold", "\(s.today.missed) walked away") }
+        if s.screen == "plan", s.day > 0, !s.report.isEmpty { return (signedMoney(s.report.earnings), "yesterday, \(s.report.sold) sold") }
+        return nil
     }
 
     /// Right of the notch: a small fast-forward toggle during the day, else the high.
@@ -317,6 +387,8 @@ struct IslandView: View {
 struct BodyView: View {
     @ObservedObject var model: NotchModel
     @ObservedObject var sound: Sound
+    @ObservedObject var assistant: AssistantModel
+    let link: GameLink
     let gameView: NSView
     let actions: NotchActions
     private var s: GameState { model.state }
@@ -342,31 +414,48 @@ struct BodyView: View {
     }
 
     private var fastButton: some View {
-        Button { actions.fast(s.fast != 1) } label: { Label("Fast", systemImage: "forward.fill") }
+        Button { assistant.setFast(s.fast != 1) } label: { Label("Fast", systemImage: "forward.fill") }
             .buttonStyle(NotchButtonStyle(on: s.fast == 1))
             .help(s.fast == 1 ? "Back to normal speed" : "Fast forward the day")
     }
 
-    // MARK: Mini: the street around your stand
+    // MARK: Mini: the street while selling, the day's plan before
 
     private var miniView: some View {
         let size = CGSize(width: NotchLayout.view.width * NotchLayout.viewScale, height: NotchLayout.view.height * NotchLayout.viewScale)
+        let menus = model.menus && s.screen == "plan"
+        let height = model.viewHeight
         return VStack(spacing: NotchLayout.pad) {
-            if model.inGame {
-                Button(action: actions.full) {
-                    GameCrop(model: model, rect: model.around(width: NotchLayout.view.width, height: NotchLayout.view.height))
-                        .frame(width: size.width, height: size.height)
-                        .overlay(alignment: .topLeading) { hud(leading: true).padding(6) }
-                        .overlay(alignment: .topTrailing) { hud(leading: false).padding(6) }
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(LT.panelDark, lineWidth: 2))
-                        .contentShape(Rectangle())
+            Group {
+                if model.running {
+                    street(width: NotchLayout.view.width, height: size.height)
+                } else if s.screen == "plan" {
+                    HStack(spacing: NotchLayout.pad) {
+                        street(width: menus ? (size.width - NotchLayout.menus.width - NotchLayout.pad) / 2 : 120, height: height)
+                            .overlay(alignment: .bottomLeading) {
+                                Text("Day \(s.dayNumber)  \(s.locationName)").font(LT.font(15)).foregroundStyle(LT.yellow)
+                                    .padding(.horizontal, 6).padding(.vertical, 1)
+                                    .background(RoundedRectangle(cornerRadius: 5).fill(.black.opacity(0.65)))
+                                    .padding(6)
+                                    .allowsHitTesting(false)
+                            }
+                        if menus {
+                            // The game's own stock bar, tabs and panel, live and clickable.
+                            GameCrop(model: model, rect: NotchLayout.menus, link: link)
+                                .frame(width: NotchLayout.menus.width, height: NotchLayout.menus.height)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                                .overlay(RoundedRectangle(cornerRadius: 8).stroke(LT.panelDark, lineWidth: 2))
+                        } else {
+                            planner.frame(maxWidth: .infinity, maxHeight: .infinity)
+                        }
+                    }
+                } else if s.screen == "dialog" {
+                    question
+                } else {
+                    wholeScreen(height: size.height)
                 }
-                .buttonStyle(.plain)
-                .help("Open the full game")
-            } else {
-                wholeScreen(height: size.height)
             }
+            .frame(width: size.width, height: height)
 
             HStack(spacing: 6) {
                 Button(action: actions.collapse) { Label("Hide", systemImage: "chevron.up") }
@@ -374,30 +463,139 @@ struct BodyView: View {
                     .help("Tuck it back into the notch")
                 soundButton
                 Spacer()
-                if model.running { fastButton }
-                if s.screen == "plan", short > 0 {
-                    Button(action: actions.restock) { Label("Restock " + money(Supplies.cost(Advisor.restock(s, cups: Advisor.expectedCups(s)))), systemImage: "cart.fill") }
+                if s.screen == "plan" {
+                    HStack(spacing: 0) {
+                        Button { model.menus = false } label: { Label("Quick", systemImage: "slider.horizontal.3") }
+                            .buttonStyle(NotchButtonStyle(on: !model.menus))
+                            .help("Stock, recipe, price and restocking at a glance")
+                        Button { model.menus = true } label: { Label("Menus", systemImage: "square.grid.2x2.fill") }
+                            .buttonStyle(NotchButtonStyle(on: model.menus))
+                            .help("The game's own tabs: rent, upgrades, staff, marketing, recipe, supplies, results")
+                    }
+                    Spacer()
+                }
+                if model.running {
+                    Button(action: assistant.skipDay) { Label("Skip day", systemImage: "forward.end.fill") }
                         .buttonStyle(NotchButtonStyle())
-                        .help("Buy enough for about \(Advisor.expectedCups(s)) cups, the day the forecast suggests")
+                        .help("Play out the rest of the day at once")
+                    fastButton
                 }
                 if s.screen == "plan" {
-                    Button(action: actions.startDay) { Label("Start day", systemImage: "play.fill") }
+                    Button(action: assistant.startDay) { Label("Start day", systemImage: "play.fill") }
                         .buttonStyle(NotchButtonStyle(prominent: true))
+                        .disabled(assistant.busy != nil)
                 }
                 Button(action: actions.full) { Label("Full game", systemImage: "arrow.up.left.and.arrow.down.right") }
                     .buttonStyle(NotchButtonStyle(prominent: true))
-                    .help("Open the whole game here")
+                    .help("Open the whole game here: rent, upgrades, staff, marketing")
             }
             .frame(height: NotchLayout.bar)
         }
         .padding(NotchLayout.pad)
     }
 
+    /// The live street around your stand, `width` game pixels wide at 2x. Click to open the full game.
+    private func street(width: CGFloat, height: CGFloat) -> some View {
+        Button(action: actions.full) {
+            GameCrop(model: model, rect: model.around(width: width, height: height / NotchLayout.viewScale))
+                .frame(width: width * NotchLayout.viewScale, height: height)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(LT.panelDark, lineWidth: 2))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("Open the full game")
+    }
+
+    /// The everyday plan: stock, recipe, price, restock. Everything else is in the full game.
+    private var planner: some View {
+        let expected = Advisor.expectedCups(s)
+        let short = s.cupsServable < expected
+        let plan = Advisor.restock(s, cups: expected)
+        let recipe = assistant.shownRecipe
+        return VStack(alignment: .leading, spacing: 7) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("\(s.lowF)-\(s.highF)F \(s.forecastWords)").font(LT.font(18)).foregroundStyle(LT.yellow)
+                Spacer(minLength: 4)
+                Text("rent \(money(s.rent))/day").font(LT.font(15)).foregroundStyle(LT.dim)
+            }
+            GameCrop(model: model, rect: CGRect(x: 4, y: 0, width: 316, height: 38))   // the game's own stock bar, icons whole
+                .frame(width: 316, height: 38)
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+            HStack(spacing: 10) {
+                stepper("lemons", "\(recipe[0])") { assistant.nudgeRecipe(0, by: $0) }
+                stepper("sugar", "\(recipe[1])") { assistant.nudgeRecipe(1, by: $0) }
+                stepper("ice", "\(recipe[2])") { assistant.nudgeRecipe(2, by: $0) }
+            }
+            HStack(spacing: 8) {
+                stepper("price", money(assistant.shownPrice)) { assistant.nudgePrice(by: $0 * 10) }
+                Spacer(minLength: 0)
+                if short {
+                    Button(action: assistant.restock) {
+                        Label("Restock " + money(Supplies.cost(plan)), systemImage: "cart.fill")
+                    }
+                    .buttonStyle(NotchButtonStyle())
+                    .disabled(assistant.busy != nil)
+                    .help("Buys what's missing for about \(expected) cups, the day the forecast suggests")
+                }
+            }
+            Text(assistant.busy.map { $0 + "..." } ?? assistant.lastResult ?? (short ? "Serves \(s.cupsServable) cups; the forecast wants about \(expected)." : "Serves \(s.cupsServable) cups, enough for about \(expected). Ready."))
+                .font(LT.font(15)).foregroundStyle(assistant.busy == nil && short && assistant.lastResult == nil ? warnColor : LT.dim)
+                .lineLimit(1)
+            if !assistant.recipes.isEmpty {
+                HStack(spacing: 5) {
+                    Text("recipes").font(LT.font(15)).foregroundStyle(LT.dim)
+                    ForEach(assistant.recipes.prefix(4)) { r in
+                        Button { assistant.apply(r) } label: { Text(r.name) }
+                            .buttonStyle(NotchButtonStyle())
+                            .help("\(r.lemons) lemons, \(r.sugar) sugar, \(r.ice) ice at \(money(r.price))")
+                    }
+                }
+            }
+            if let tip = assistant.tips.first {
+                HStack(alignment: .top, spacing: 5) {
+                    Image(systemName: "lightbulb.fill").font(.system(size: 11)).foregroundStyle(LT.yellow).padding(.top, 2)
+                    Text(tip).font(LT.font(15)).foregroundStyle(.white).lineLimit(3).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(8)
+        .background(RoundedRectangle(cornerRadius: 8).fill(LT.panel))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(LT.panelDark, lineWidth: 2))
+    }
+
+    private func stepper(_ label: String, _ value: String, _ nudge: @escaping (Int) -> Void) -> some View {
+        HStack(spacing: 3) {
+            Text(label).font(LT.font(15)).foregroundStyle(LT.dim)
+            Button { nudge(-1) } label: { Text("-") }.buttonStyle(ChipStyle())
+            Text(value).font(LT.font(18)).foregroundStyle(LT.yellow).frame(minWidth: 16)
+            Button { nudge(1) } label: { Text("+") }.buttonStyle(ChipStyle())
+        }
+    }
+
     /// Away from the street (main menu, a question from the game): the whole
     /// screen, uncropped, beside a note on what to do.
+    /// The game is asking something: the middle of the screen at 1x, clickable, so it can be answered here.
+    private var question: some View {
+        HStack(spacing: 12) {
+            GameCrop(model: model, rect: NotchLayout.dialog, link: link)
+                .frame(width: NotchLayout.dialog.width, height: NotchLayout.dialog.height)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(LT.panelDark, lineWidth: 2))
+            VStack(alignment: .leading, spacing: 8) {
+                Text("The game is asking").font(LT.font(22)).foregroundStyle(LT.yellow)
+                Text("Answer right here, or open the full game.").font(LT.font(17)).foregroundStyle(.white)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
+            .padding(.top, 6)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
     private func wholeScreen(height: CGFloat) -> some View {
-        let dialog = s.screen == "dialog"
-        return HStack(spacing: 12) {
+        HStack(spacing: 12) {
             Button(action: actions.full) {
                 GameCrop(model: model, rect: CGRect(x: 0, y: 0, width: 640, height: 480))
                     .frame(width: height * 4 / 3, height: height)
@@ -408,10 +606,9 @@ struct BodyView: View {
             .buttonStyle(.plain)
             .help("Open the full game")
             VStack(alignment: .leading, spacing: 8) {
-                Text(dialog ? "The game needs you" : (s.screen == "menu" ? "Main menu" : "Lemonade Remixed"))
+                Text(s.screen == "menu" ? "Main menu" : "Lemonade Remixed")
                     .font(LT.font(24)).foregroundStyle(LT.yellow)
-                Text(dialog ? "Answer it in the full game, then the street view comes back."
-                            : "Start a career or load a save in the full game. Once your stand is open, its street shows up here.")
+                Text("Start a career or load a save in the full game. Once your stand is open, you can run it from here.")
                     .font(LT.font(17)).foregroundStyle(.white)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
@@ -421,44 +618,6 @@ struct BodyView: View {
         }
         .frame(height: height)
     }
-
-    /// Numbers floating over the street, top corners.
-    @ViewBuilder private func hud(leading: Bool) -> some View {
-        let warn = Color(red: 1, green: 0.55, blue: 0.4)
-        let lines: [(String, String, Color)] = {
-            guard model.inGame else { return [] }
-            if model.running {
-                return leading ? [(money(s.today.profit), "profit today", LT.yellow), ("\(s.today.sold)", "cups sold", LT.yellow)]
-                               : [("\(s.tempsF[1])F", "right now", LT.yellow), ("\(s.today.missed)", "walked away", LT.yellow)]
-            }
-            if leading {
-                var l = [("Day \(s.dayNumber)", s.locationName, LT.yellow)]
-                if s.day > 0, !s.report.isEmpty {
-                    let e = s.report.earnings
-                    l.append(((e > 0 ? "+" : "") + money(e), "yesterday, \(s.report.sold) sold", e < 0 ? warn : LT.yellow))
-                }
-                return l
-            }
-            return [("\(s.lowF)-\(s.highF)F", s.forecastWords, LT.yellow), (money(s.price), "per cup", LT.yellow),
-                    ("\(s.cupsServable)", short > 0 ? "cups ready (need \(Advisor.expectedCups(s)))" : "cups ready", short > 0 ? warn : LT.yellow)]
-        }()
-        if !lines.isEmpty {
-            VStack(alignment: leading ? .leading : .trailing, spacing: 1) {
-                ForEach(Array(lines.enumerated()), id: \.offset) { _, l in
-                    HStack(alignment: .firstTextBaseline, spacing: 4) {
-                        if !leading { Text(l.1).font(LT.font(13)).foregroundStyle(LT.dim) }
-                        Text(l.0).font(LT.font(18)).foregroundStyle(l.2)
-                        if leading { Text(l.1).font(LT.font(13)).foregroundStyle(LT.dim) }
-                    }
-                }
-            }
-            .padding(.horizontal, 7).padding(.vertical, 3)
-            .background(RoundedRectangle(cornerRadius: 6).fill(.black.opacity(0.62)))
-        }
-    }
-
-    /// Cups short of what the forecast suggests, while planning.
-    private var short: Int { s.screen == "plan" ? max(0, Advisor.expectedCups(s) - s.cupsServable) : 0 }
 
     // MARK: Full: the whole game
 
@@ -478,7 +637,7 @@ struct BodyView: View {
                     .help("Move the game to its own window")
                 Button(action: actions.mini) { Label("Shrink", systemImage: "arrow.down.right.and.arrow.up.left") }
                     .buttonStyle(NotchButtonStyle(prominent: true))
-                    .help("Back to the small street view (or click anywhere else)")
+                    .help("Back to the small view (or click anywhere else)")
             }
             .padding(.horizontal, 8)
             .frame(height: NotchLayout.header)
@@ -544,8 +703,11 @@ final class NotchController {
         return p
     }
 
-    init(screen: NSScreen, sound: Sound, link: GameLink, startDay: @escaping () -> Void, restock: @escaping () -> Void,
-         fast: @escaping (Bool) -> Void, openWindow: @escaping () -> Void) {
+    /// Called when the notch opens from the island, so the app can put its window away:
+    /// the game shows in one place at a time.
+    var onOpen: () -> Void = {}
+
+    init(screen: NSScreen, sound: Sound, link: GameLink, assistant: AssistantModel, openWindow: @escaping () -> Void) {
         layout = NotchLayout(screen: screen)
         game = GameView(link: link)
         model.right = layout.freeRight()
@@ -557,21 +719,29 @@ final class NotchController {
         islandHost.sizingOptions = []
         island.contentView = islandHost
 
-        var actions = NotchActions(startDay: startDay, restock: restock, fast: fast, openWindow: openWindow)
+        var actions = NotchActions(openWindow: openWindow)
         weak var weakSelf: NotchController?
         actions.toggle = { weakSelf?.toggle() }
         actions.mini = { weakSelf?.set(.mini) }
         actions.full = { weakSelf?.set(.full) }
         actions.collapse = { weakSelf?.set(.collapsed) }
-        let bodyHost = BodyHost(rootView: BodyView(model: model, sound: sound, gameView: game, actions: actions))
+        let bodyHost = BodyHost(rootView: BodyView(model: model, sound: sound, assistant: assistant, link: link, gameView: game, actions: actions))
         bodyHost.sizingOptions = []
         bodyPanel.contentView = bodyHost
         weakSelf = self
+        model.relayout = { [weak self] in
+            guard let self, self.model.mode == .mini else { return }
+            NSAnimationContext.runAnimationGroup { ctx in
+                ctx.duration = 0.16
+                ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                self.bodyPanel.animator().setFrame(self.layout.body(.mini, view: self.model.viewHeight), display: true)
+            }
+        }
 
         islandHost.onClick = { [weak self] in self?.toggle() }
         islandHost.onFast = { [weak self] in
             guard let self else { return }
-            fast(self.model.state.fast != 1)
+            assistant.setFast(self.model.state.fast != 1)
         }
         islandHost.fastRect = { [weak self] in
             guard let self, self.model.running, self.model.right > 0 else { return nil }
@@ -622,13 +792,14 @@ final class NotchController {
             bodyPanel.alphaValue = 0
             bodyPanel.orderFrontRegardless()
             island.orderFrontRegardless()
+            onOpen()
         }
         model.mode = mode
         bodyPanel.keyable = mode == .full
         NSAnimationContext.runAnimationGroup({ ctx in
             ctx.duration = 0.16
             ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            bodyPanel.animator().setFrame(layout.body(mode), display: true)
+            bodyPanel.animator().setFrame(layout.body(mode, view: model.viewHeight), display: true)
             bodyPanel.animator().alphaValue = mode == .collapsed ? 0 : 1
         }, completionHandler: { [weak self] in
             guard let self, self.model.mode == .collapsed else { return }
@@ -643,6 +814,32 @@ final class NotchController {
     }
 
     // MARK: Self-test (LEMONADE_NOTCH_SELFTEST=<log file>)
+
+    /// Testing: polls `path` for lines like "click X Y" (screen points, top-left
+    /// origin), runs them as clicks on the notch's own windows, then empties it.
+    func watchCommands(_ path: String) {
+        let t = Timer(timeInterval: 0.3, repeats: true) { [weak self] _ in
+            guard let self, let text = try? String(contentsOfFile: path, encoding: .utf8), !text.isEmpty else { return }
+            try? "".write(toFile: path, atomically: true, encoding: .utf8)
+            for line in text.split(separator: "\n") {
+                let p = line.split(separator: " ")
+                guard p.count == 3, p[0] == "click", let x = Double(p[1]), let y = Double(p[2]) else { continue }
+                let top = NSScreen.screens.first?.frame.maxY ?? 0
+                let pt = CGPoint(x: x, y: top - y)
+                for panel in [self.island, self.bodyPanel] where panel.isVisible && panel.frame.contains(pt) {
+                    let local = CGPoint(x: pt.x - panel.frame.minX, y: pt.y - panel.frame.minY)
+                    for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+                        if let e = NSEvent.mouseEvent(with: type, location: local, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                                      windowNumber: panel.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1) {
+                            panel.sendEvent(e)
+                        }
+                    }
+                    break
+                }
+            }
+        }
+        RunLoop.main.add(t, forMode: .common)
+    }
 
     func selfTest(log path: String) {
         func note(_ s: String) {
