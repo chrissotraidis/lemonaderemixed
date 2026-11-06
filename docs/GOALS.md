@@ -73,7 +73,7 @@ Chris's first look (5 November) found the notch and picture not good enough: the
 - [ ] Still unmapped: upgrades and staff owned, advertising.
 - [ ] Volume levels beyond mute (music/effects sliders) through the in-game agent.
 
-## G5. The game in the notch (second version built, waiting for Chris)
+## G5. The game in the notch ✅
 
 *Objective:* the stand lives in the notch while you work. You glance at it for status, open a live street view with speed controls, and open the whole game when you want to play.
 
