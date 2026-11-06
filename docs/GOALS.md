@@ -146,7 +146,7 @@ The Advisor is a game-style button beside the game's speaker; it opens over the 
 
 *Objective:* a plan, proven in the simulator, for Lemonade Remixed on iOS and iPadOS as a resizable app.
 
-- [ ] Decide how the original runs there. Wine can't run on iOS (no JIT for third-party apps), so the candidates are an x86 interpreter with a small Win32 layer for the handful of GDI/USER/FMOD calls this game makes, or a rebuild of the rules from MECHANICS.md and STATE.md drawing the player's decoded art. Prototype the cheaper one in the simulator first.
+- [x] Decide how the game runs there (7 November): a native Swift engine that plays the same rules with the player's decoded art, checked against the original side by side. Wine can't run on iOS, and an x86 interpreter would still leave the macOS 28 problem. The plan, phases and sizes are in [PORT.md](PORT.md).
 - [ ] Reuse RemixCore (state, advisor, restock, saved recipes) and the themed SwiftUI assistant unchanged.
 - [ ] Touch controls, any window size on iPad (Stage Manager, Split View), and the iOS icon (master in `mac/Resources/icon`).
 
@@ -154,4 +154,4 @@ The Advisor is a game-style button beside the game's speaker; it opens over the 
 
 ## Fallback
 
-If running the original ever blocks a goal (Armadillo, Wine regressions, art that can't be swapped cleanly), the documented mechanics allow a full rebuild that uses the same decoded art. That is a larger project and is not the plan.
+The native engine in [PORT.md](PORT.md) is now the plan for iPhone, iPad and macOS 28 and later. Until it matches the original, the Wine-based app stays the way to play.

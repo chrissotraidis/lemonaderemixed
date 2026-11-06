@@ -1,10 +1,11 @@
 # Lemonade Remixed
 
-Lemonade Remixed runs the original 2002 **Lemonade Tycoon Deluxe** (Hexacto)
-unchanged inside a native Mac app, and puts your lemonade stand in the MacBook
-notch. The game's own code, art and sound do the work. The app adds a sharp
-picture at any size, sound controls, an in-game Advisor, and a notch you can
-glance at, open, and play from while you work.
+Lemonade Remixed brings the 2002 classic **Lemonade Tycoon Deluxe** (Hexacto)
+to macOS and puts your lemonade stand in the MacBook notch. It installs in
+seconds from your own copy of the game and runs it unchanged, so it plays
+exactly like the original. The app adds a sharp picture at any size, sound
+controls, an in-game Advisor, and a notch you can glance at, open, and play
+from while you work.
 
 **AI disclosure:** Lemonade Remixed uses substantial AI assistance for code,
 tests, documentation, debugging and maintenance. There is no audited percentage
@@ -145,7 +146,8 @@ the original's.
 | Macs without a notch (the pill) | Checked by simulating a notchless screen; not yet seen on a real notchless Mac or an external display. |
 | Intel Macs, macOS 14 and 15 | Not tested. |
 | macOS 28 | Unknown. The bundled Wine is Intel code that runs through Rosetta 2, which Apple scales back after macOS 27; see [G10 in GOALS.md](docs/GOALS.md#g10-ship). |
-| Widget, prebuilt download, iPhone and iPad | Planned; see [docs/GOALS.md](docs/GOALS.md). |
+| iPhone and iPad | Not yet. Needs the native engine described in [docs/PORT.md](docs/PORT.md). |
+| Widget, prebuilt download | Planned; see [docs/GOALS.md](docs/GOALS.md). |
 
 ## How it works
 
@@ -161,9 +163,22 @@ the original's.
   the app draws with Metal.
 - [mac](mac) is the Swift app: the window, the Advisor, the notch and Settings.
 
+The original game is Windows software, so the app runs it in a copy of
+[Wine](https://www.winehq.org) bundled inside, out of sight: no Wine windows,
+setup or Dock icons. That keeps the game exactly as it was, and it's also why
+the app is Mac-only for now.
+
+## What's next
+
+The plan is a native engine written in Swift that plays the same game with
+your own copy's art and sound, without Wine. That brings Lemonade Remixed to
+iPhone and iPad, and keeps the Mac app running past macOS 27. The phases,
+sizes and risks are in [docs/PORT.md](docs/PORT.md).
+
 ## Documents
 
 - [docs/GOALS.md](docs/GOALS.md): the build plan as goals, each with its test.
+- [docs/PORT.md](docs/PORT.md): the plan for a native engine on Mac, iPhone and iPad.
 - [docs/MECHANICS.md](docs/MECHANICS.md): how the original game works, with the numbers measured so far.
 - [docs/PLAN.md](docs/PLAN.md): what the remix adds and why.
 - [docs/STATE.md](docs/STATE.md): where the game keeps its state in memory.
