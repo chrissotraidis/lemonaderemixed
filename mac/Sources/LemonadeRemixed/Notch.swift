@@ -398,18 +398,8 @@ struct IslandView: View {
 
     @ViewBuilder private func left(_ h: CGFloat) -> some View {
         if open {
-            // The stand is on screen below: today's numbers instead.
-            HStack(spacing: 0) {
-                Spacer(minLength: 0)
-                if model.hasGame, let extra {
-                    VStack(alignment: .trailing, spacing: -4) {
-                        Text(extra.0).font(LT.font(h * 0.5)).foregroundStyle(.white)
-                        Text(extra.1).font(LT.font(h * 0.38)).foregroundStyle(LT.dim)
-                    }
-                    .lineLimit(1).minimumScaleFactor(0.45)
-                }
-            }
-            .padding(.trailing, 8)
+            // The small view below shows everything; the wing stays plain black.
+            Color.clear
         } else {
             // Just your stand. Clicking here opens the small view.
             street(halves(h).0, h, leading: true, alone: !split)
@@ -420,11 +410,7 @@ struct IslandView: View {
 
     @ViewBuilder private func right(_ h: CGFloat) -> some View {
         if open {
-            HStack(spacing: 0) {
-                if model.hasGame { Text(money(s.cash)).font(LT.font(h * 0.56)).foregroundStyle(LT.yellow).lineLimit(1).minimumScaleFactor(0.6) }
-                Spacer(minLength: 0)
-            }
-            .padding(.leading, 8)
+            Color.clear
         } else {
             // The street goes on, with fast-forward and the numbers laid over it, small.
             // Clicking here toggles fast-forward while selling.
@@ -807,9 +793,9 @@ struct BodyView: View {
         VStack(spacing: NotchLayout.fullPad) {
             HStack(spacing: 6) {
                 VStack(alignment: .leading, spacing: -3) {
-                    Text(model.hasGame ? "Day \(s.dayNumber) - \(s.locationName) - \(s.lowF)F to \(s.highF)F" : "Lemonade Remixed")
-                        .font(LT.font(18)).foregroundStyle(.white).lineLimit(1)
-                    Text(detailLine).font(LT.font(14)).foregroundStyle(LT.dim).lineLimit(1)
+                    Text(model.hasGame ? "Day \(s.dayNumber)" : "Lemonade")
+                        .font(LT.font(20)).foregroundStyle(.white).lineLimit(1).minimumScaleFactor(0.7)
+                    Text(detailLine).font(LT.font(14)).foregroundStyle(LT.dim).lineLimit(1).minimumScaleFactor(0.7)
                 }
                 Spacer(minLength: 4)
                 cashChip
@@ -834,12 +820,11 @@ struct BodyView: View {
         .padding(NotchLayout.fullPad)
     }
 
+    /// Short enough for the space beside the header's buttons; the rest is in the game below.
     private var detailLine: String {
-        guard model.hasGame else { return "Start or load a game." }
-        if s.running == 1 { return "Selling: \(s.today.sold) cups, \(money(s.today.profit)) profit, \(s.today.missed) walked away" }
-        var stock = "Stock serves \(s.cupsServable) cups at \(money(s.price))"
-        if s.popularity >= 0 { stock += ", popularity \(s.popularity)%, satisfaction \(s.satisfaction)%" }
-        return model.tip.map { stock + ".  " + $0 } ?? stock
+        guard model.hasGame else { return "Remixed" }
+        if s.running == 1 { return "\(s.today.sold) sold" }
+        return s.locationName
     }
 }
 
