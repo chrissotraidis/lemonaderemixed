@@ -18,6 +18,9 @@ public struct GameState: Codable, Equatable {
     public var running = 0
     public var location = 0, rent = 0
     public var fast = 0                    // 1 while fast-forwarding
+    /// The town view's meters for the current location, 0-100 (-1 when unknown).
+    /// Both update when a day ends.
+    public var popularity = -1, satisfaction = -1
     public var today = Today()
     public var report = Report()
 

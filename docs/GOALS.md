@@ -69,7 +69,8 @@ Chris's first look (5 November) found the notch and picture not good enough: the
 
 - [x] The helper reads cash, price, recipe, stock, day, the three-period forecast and live temperatures, location and rent, today's sales/profit/missed, and the last day's report (revenue, stock used and lost, rent, ads, earnings, walk-aways, melted ice) from fixed addresses in the game ([STATE.md](STATE.md)), plus the current screen from the frame. The bridge's `info` command returns it as JSON; the app polls it twice a second.
 - [x] Checked against the game's own screens over nine scripted days, including a move to the Park, purchases and recipe changes.
-- [ ] Still unmapped: popularity, satisfaction, upgrades and staff owned, advertising. Needed for the notch's popularity meter and the stand sprite's upgrade level.
+- [x] Popularity and satisfaction for the current location (6 November; [STATE.md](STATE.md)), shown as game-style meters in the notch's planner and in the full game's header line.
+- [ ] Still unmapped: upgrades and staff owned, advertising.
 - [ ] Volume levels beyond mute (music/effects sliders) through the in-game agent.
 
 ## G5. The game in the notch (second version built, waiting for Chris)
@@ -90,8 +91,9 @@ Three states, and the game keeps running in all of them:
 - [x] Clicking the notch toggles island ↔ street view (from the full game, back to the street view). Clicking anywhere else, or Esc, shrinks the full game to the street view, which stays open while you work. Transitions take 0.16 s.
 - [ ] Chris's verdict on the island's right wing (what it should show) and on the street view's smoothness.
 - [ ] The yellow pulse at day end, checked on screen.
-- [ ] Without a notch: a pill at the top centre. Across Spaces and over fullscreen apps; a setting chooses window, notch or both.
-- [ ] Popularity, satisfaction and owned upgrades mapped in memory, for the street view.
+- [x] Without a notch: a pill at the top centre, the same two halves meeting with no gap, the same lemon outline and the same small view hanging from it. Checked with `LEMONADE_PILL=1` (it lays out as on a Mac without a notch) on 6 November; not yet seen on a real notchless Mac or an external display.
+- [ ] Across Spaces and over fullscreen apps, checked on screen.
+- [x] Popularity and satisfaction mapped and shown (the planner's meters; satisfaction turns orange under 50%).
 
 *Done when:* a full in-game week can be played from the notch, then Chris uses it for a working session.
 

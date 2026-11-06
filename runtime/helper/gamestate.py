@@ -90,12 +90,17 @@ def game_state():
     revenue, used, lost, rent_paid, marketing = _ints(h, 0x5419AC, 5)
     melted = _ints(h, 0x541B44, 1)[0]
     speed = _ints(h, 0x53C78C, 1)[0]
+    # The planning screen's two meters (popularity, satisfaction), as whole percents.
+    popularity = _ints(h, 0x5984F0, 1)[0]
+    satisfaction = _ints(h, 0x598534, 1)[0]
     rents = [_ints(h, 0x5B9260 + 32 * k, 1)[0] for k in range(10)]
     return {
         "screen": screen(), "cash": cash, "price": price,
         "recipe": [lemons_r, sugar_r, ice_r], "stock": [lemons, sugar, ice, cups],
         "day": day, "weather": list(wx), "tempsC": list(temps), "running": running,
         "location": location, "fast": 1 if speed > 1 else 0, "rent": rents[location] if 0 <= location < 10 else 0,
+        "popularity": popularity if 0 <= popularity <= 100 else -1,
+        "satisfaction": satisfaction if 0 <= satisfaction <= 100 else -1,
         "today": {"sold": sold, "profit": profit, "missed": missed},
         "report": {"sold": r_sold, "revenue": revenue, "used": used, "lost": lost, "rent": rent_paid,
                    "marketing": marketing, "earnings": profit, "missed": walk_price + walk_wait,

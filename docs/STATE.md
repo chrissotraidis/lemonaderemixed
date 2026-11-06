@@ -37,6 +37,17 @@ Where the original game (Zone.com build of Lemonade Tycoon Deluxe) keeps its sta
 
 Ten 32-byte records in display order: rent in cents, a name pointer, the location's id, then four object pointers. Rents read 0, 1000, 3000, 3000, 4000, 5000, 5000, 10000, 10000, 15000, matching the rent screen.
 
+## Meters for the current location (0x5984e0)
+
+The town view's two bars. Both change only when a day ends, and both switch to the new location's values when the stand moves (moving to the Park read popularity 0, satisfaction 100).
+
+| Address | Meter | Notes |
+|---|---|---|
+| 0x5984f0 | popularity, 0–100 | mirrored at 0x598500. Rose one point a day in the Suburbs (15 → 20 over five days). |
+| 0x598534 | satisfaction, 0–100 | mirrored at 0x598544. Followed the recipe: 98, 90, 81, 53, 49, 41 as the recipe was changed. |
+
+Found on 6 November 2026 by playing six days in a fresh career and keeping only the values that tracked the drawn bars (bar length 0–101 pixels at y 460 from x 335 and x 442). The bridge's `info` reports them as `popularity` and `satisfaction`.
+
 ## Still to find
 
-Current location, popularity and satisfaction (per location), time of day, upgrades and staff owned, advertising, and the screen being shown.
+Time of day, upgrades and staff owned, advertising, and the popularity and satisfaction of locations other than the current one. (Current location is at 0x53c808; the screen being shown comes from the frame.)

@@ -20,19 +20,24 @@ struct NotchLayout {
     static let fastGlyph = CGRect(x: 6, y: 5, width: 26, height: 22)    // in the right wing, top-left origin
 
     var frame: CGRect { screen.frame }
-    var hasNotch: Bool { screen.auxiliaryTopLeftArea != nil }
+    /// LEMONADE_PILL=1 lays out as on a Mac without a notch (testing); LEMONADE_PILL_X moves its centre.
+    private static let env = ProcessInfo.processInfo.environment
+    var hasNotch: Bool { screen.auxiliaryTopLeftArea != nil && Self.env["LEMONADE_PILL"] != "1" }
     var stripHeight: CGFloat { max(screen.safeAreaInsets.top, NSStatusBar.system.thickness) }
     var top: CGFloat { frame.maxY - stripHeight }
+    /// Without a notch, a zero-width "notch" at the top centre: the two halves meet there as one pill.
     var notch: CGRect {
-        guard let l = screen.auxiliaryTopLeftArea, let r = screen.auxiliaryTopRightArea else {
-            return CGRect(x: frame.midX - 60, y: top, width: 120, height: stripHeight)
+        guard hasNotch, let l = screen.auxiliaryTopLeftArea, let r = screen.auxiliaryTopRightArea else {
+            let x = Self.env["LEMONADE_PILL_X"].flatMap(Double.init).map { CGFloat($0) } ?? frame.midX
+            return CGRect(x: x, y: top, width: 0, height: stripHeight)
         }
         return CGRect(x: l.maxX, y: top, width: max(0, r.minX - l.maxX), height: stripHeight)
     }
 
     /// Free room right of the notch, up to the first menu-bar icon of another app.
+    /// Without a notch the pill always gets its full right half.
     func freeRight() -> CGFloat {
-        guard hasNotch else { return 0 }
+        guard hasNotch else { return Self.wing }
         if let forced = ProcessInfo.processInfo.environment["LEMONADE_NOTCH_RIGHT"].flatMap(Double.init) { return forced }   // testing
         let mainHeight = NSScreen.screens.first?.frame.height ?? frame.height
         var first = frame.maxX
@@ -50,7 +55,7 @@ struct NotchLayout {
     }
 
     func island(right: CGFloat) -> CGRect {
-        let left = hasNotch ? Self.leftWidth(right: right) : 0
+        let left = Self.leftWidth(right: right)
         return CGRect(x: notch.minX - left, y: top - Self.lip, width: left + notch.width + right, height: stripHeight + Self.lip)
     }
 
@@ -310,6 +315,32 @@ struct ChipStyle: ButtonStyle {
 
 let warnColor = Color(red: 1, green: 0.55, blue: 0.4)
 
+/// One of the game's meters (popularity, satisfaction): a label over a thin white bar, like the town view's.
+struct Meter: View {
+    let label: String
+    let value: Int
+    var warnBelow = -1
+    var body: some View {
+        let low = value < warnBelow
+        VStack(alignment: .leading, spacing: 1) {
+            HStack(spacing: 4) {
+                Text(label).font(LT.font(13)).foregroundStyle(LT.dim)
+                Spacer(minLength: 2)
+                Text("\(value)%").font(LT.font(14)).foregroundStyle(low ? warnColor : .white)
+            }
+            GeometryReader { g in
+                ZStack(alignment: .leading) {
+                    Rectangle().fill(LT.panelDark)
+                    Rectangle().fill(low ? warnColor : .white).frame(width: g.size.width * CGFloat(min(100, max(0, value))) / 100)
+                }
+            }
+            .frame(height: 3)
+        }
+        .help(label == "popularity" ? "How many people here know your stand. It grows each day, faster with ads and upgrades."
+                                    : "How much yesterday's customers liked your lemonade. Mostly the recipe.")
+    }
+}
+
 func signedMoney(_ cents: Int) -> String { (cents > 0 ? "+" : "") + money(cents) }
 
 // MARK: - The island
@@ -328,13 +359,10 @@ struct IslandView: View {
         let h = layout.stripHeight
         let shape = UnevenRoundedRectangle(bottomLeadingRadius: open ? 0 : 10, bottomTrailingRadius: open ? 0 : 10)
         HStack(spacing: 0) {
-            if layout.hasNotch {
-                left(h).frame(width: leftW)
-                Color.clear.frame(width: layout.notch.width)
-                if split { right(h).frame(width: model.right) }
-            } else {
-                left(h).frame(width: leftW)
-            }
+            // With a notch, the notch sits between the halves; without one, they meet as a pill.
+            left(h).frame(width: leftW)
+            Color.clear.frame(width: layout.notch.width)
+            if split { right(h).frame(width: model.right) }
         }
         .frame(height: h)
         // Closed, the island dips a few points below the notch so a lemon outline can run
@@ -667,6 +695,12 @@ struct BodyView: View {
             Text("\(s.lowF)-\(s.highF)F \(s.forecastWords)").font(LT.font(18)).foregroundStyle(LT.yellow)
                 .fixedSize(horizontal: false, vertical: true)
             Text(s.rent > 0 ? "rent \(money(s.rent)) a day" : "no rent here").font(LT.font(14)).foregroundStyle(LT.dim)
+            if s.popularity >= 0, s.satisfaction >= 0 {
+                HStack(spacing: 10) {
+                    Meter(label: "popularity", value: s.popularity)
+                    Meter(label: "satisfaction", value: s.satisfaction, warnBelow: 50)
+                }
+            }
             Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 6) {
                 GridRow {
                     stepper("lemons", "\(recipe[0])") { assistant.nudgeRecipe(0, by: $0) }
@@ -803,7 +837,8 @@ struct BodyView: View {
     private var detailLine: String {
         guard model.hasGame else { return "Start or load a game." }
         if s.running == 1 { return "Selling: \(s.today.sold) cups, \(money(s.today.profit)) profit, \(s.today.missed) walked away" }
-        let stock = "Stock serves \(s.cupsServable) cups at \(money(s.price))"
+        var stock = "Stock serves \(s.cupsServable) cups at \(money(s.price))"
+        if s.popularity >= 0 { stock += ", popularity \(s.popularity)%, satisfaction \(s.satisfaction)%" }
         return model.tip.map { stock + ".  " + $0 } ?? stock
     }
 }
