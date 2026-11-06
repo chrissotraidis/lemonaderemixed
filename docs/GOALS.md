@@ -137,6 +137,7 @@ The Advisor is a game-style button beside the game's speaker; it opens over the 
 
 - [ ] A signed app with Wine bundled (LGPL, with its source offered), a player README covering where to get their own installer, and a release checklist.
 - [ ] A clean-machine check, like PadMint's player check: a fresh user account with no developer tools, just the app and `Setup.exe`.
+- [ ] **macOS 28 and Rosetta.** The app is native arm64, but the bundled Wine (Wine Stable 9.0, 183 x86_64 binaries) runs through Rosetta 2, so macOS shows "Support Ending for Intel-based Apps". Apple keeps full Rosetta through macOS 27 and only a games-oriented subset after; whether Wine qualifies is unannounced. Before shipping: test on the macOS 28 beta, and switch `bundle.sh` to a native arm64 Wine (with its x86 translation layer) once one is usable on macOS. Nothing else in the app depends on how Wine is built. If none arrives in time, the Fallback below applies.
 - [ ] Publishing is Chris's decision.
 
 ## G11. iPhone and iPad (plan only, in parallel with the notch)
