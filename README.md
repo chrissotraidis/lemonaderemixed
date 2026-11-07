@@ -103,10 +103,25 @@ the app under **Help ▸ Where to Get the Game**.
 
 | Need | Notes |
 |---|---|
-| A Mac with macOS 14 or later | Tested on Apple Silicon, where Wine runs the game through Rosetta 2. Intel builds are untested. |
-| Xcode command-line tools | For `swift build`. |
-| [Wine Stable](https://github.com/Gcenx/macOS_Wine_builds) | `brew install --cask wine-stable`; the build copies it into the app. |
-| LLVM | `brew install llvm`; builds the small in-game agent (sound and picture). |
+| A Mac with macOS 14 or later | Tested on Apple Silicon. Intel Macs are untested. |
+| Xcode command-line tools | `xcode-select --install` |
+| Rosetta 2 (Apple Silicon) | `softwareupdate --install-rosetta --agree-to-license`; Wine runs the game through it. |
+
+That's all: no Homebrew. The build downloads the rest once and checks each
+file's SHA-256: Wine 9.0 (the version the game is tested on; newer Wine breaks
+its copy protection, so Lemonade Remixed keeps a
+[copy of Gcenx's build](https://github.com/chrissotraidis/lemonaderemixed/releases/tag/runtime-wine-9.0_3)),
+[llvm-mingw](https://github.com/mstorsjo/llvm-mingw) for the small in-game agent,
+and the embeddable Windows Python. The first build downloads about 250 MB and
+takes a few minutes.
+
+### With PadMint
+
+[PadMint](https://github.com/chrissotraidis/padmint) builds it for you: choose
+**Lemonade Remixed**, and it fetches the source and tools, builds the app and
+hands you `LemonadeRemixed.app`. Open it and choose your `Setup.exe`.
+
+### From the command line
 
 ```sh
 git clone https://github.com/chrissotraidis/lemonaderemixed.git

@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "id": "lemonaderemixed",
+  "name": "Lemonade Remixed",
+  "game": "Lemonade Tycoon Deluxe (Windows, 2002) in a native Mac app with the original game running unchanged in a bundled Wine",
+  "kind": "emulator-shell",
+  "status": "supported",
+  "inputs": [
+    {
+      "type": "windows-installer",
+      "formats": [
+        "exe"
+      ],
+      "when": "in-app",
+      "description": "Your own Lemonade Tycoon Deluxe installer (Setup.exe, the Zone.com edition) and its registration name and key, chosen in the app after installation. The build does not read it.",
+      "verified_sha256": [
+        "9f3ee47922936b63e4940fddb6d83362e9d9e335b1b2ed81c5bc8dcdc7badead"
+      ]
+    }
+  ],
+  "targets": {
+    "macos": {
+      "hosts": {
+        "macos-arm64": "verified"
+      },
+      "output": "zip",
+      "check": "none",
+      "steps": [
+        {
+          "stage": "build",
+          "command": [
+            "{repo}/mac/bundle.sh",
+            "--output",
+            "{output}"
+          ]
+        }
+      ]
+    }
+  },
+  "requirements": {
+    "disk_gb": 2,
+    "tools": [
+      {
+        "name": "xcrun",
+        "version_args": [
+          "--find",
+          "swift"
+        ],
+        "player": true,
+        "label": "Xcode command-line tools",
+        "note": "Install Xcode's command-line tools: xcode-select --install"
+      },
+      {
+        "name": "/usr/bin/arch",
+        "version_args": [
+          "-x86_64",
+          "/bin/echo",
+          "Rosetta 2"
+        ],
+        "player": true,
+        "label": "Rosetta 2",
+        "note": "Install Rosetta 2, which runs Wine on Apple Silicon: softwareupdate --install-rosetta --agree-to-license"
+      }
+    ]
+  },
+  "publication": {
+    "public_binaries": false,
+    "reason": "The app is built on the player's Mac and contains no game files; players install the game from their own Setup.exe. Releases publish the recipe only."
+  }
+}

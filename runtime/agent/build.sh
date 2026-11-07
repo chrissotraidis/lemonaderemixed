@@ -1,8 +1,10 @@
 #!/bin/bash
-# Build the in-game agent (fmod.dll, 32-bit Windows) with Homebrew LLVM.
+# Build the in-game agent (fmod.dll, 32-bit Windows). mac/bundle.sh passes
+# LLVM=<llvm-mingw>/bin; by default this uses Homebrew LLVM.
 set -euo pipefail
 cd "$(dirname "$0")"
 LLVM=${LLVM:-/opt/homebrew/opt/llvm/bin}
+LLD_LINK=${LLD_LINK:-$LLVM/lld-link}
 OUT=build
 mkdir -p $OUT
 python3 gen.py exports.txt $OUT
@@ -20,6 +22,6 @@ implib gdi32 CreateCompatibleDC@4 CreateDIBSection@24 SelectObject@8 BitBlt@36 G
 FLAGS="--target=i686-pc-windows-msvc -O2 -ffreestanding -fno-builtin -fno-stack-protector -fno-exceptions -I. -I$OUT"
 for src in audio frametap; do $LLVM/clang $FLAGS -c $src.c -o $OUT/$src.o; done
 $LLVM/clang $FLAGS -c $OUT/thunks.c -o $OUT/thunks.o
-${LLD_LINK:-lld-link} /dll /nodefaultlib /entry:DllMain /def:$OUT/fmod.def /out:$OUT/fmod.dll /safeseh:no /base:0x0f800000 \
+"$LLD_LINK" /dll /nodefaultlib /entry:DllMain /def:$OUT/fmod.def /out:$OUT/fmod.dll /safeseh:no /base:0x0f800000 \
     $OUT/audio.o $OUT/frametap.o $OUT/thunks.o $OUT/kernel32.lib $OUT/user32.lib $OUT/gdi32.lib
 echo "$OUT/fmod.dll"
