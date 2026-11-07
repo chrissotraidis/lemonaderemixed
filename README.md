@@ -28,7 +28,7 @@ original game.
   <img alt="Wine 9 inside the app" src="https://img.shields.io/badge/runtime-Wine%209%20(bundled)-722F37">
   <img alt="Metal picture" src="https://img.shields.io/badge/picture-Metal%2C%20crisp%20pixels-5E5CE6">
   <img alt="Playable in the notch" src="https://img.shields.io/badge/notch-playable-FFD60A">
-  <img alt="Version 1.0" src="https://img.shields.io/badge/version-1.0-FF9F0A">
+  <img alt="Version 1.0.1" src="https://img.shields.io/badge/version-1.0.1-FF9F0A">
   <img alt="GPL-3.0 license" src="https://img.shields.io/badge/license-GPL--3.0-8E8E93">
   <img alt="Game data not included" src="https://img.shields.io/badge/game%20data-not%20included-FF453A">
 </p>
